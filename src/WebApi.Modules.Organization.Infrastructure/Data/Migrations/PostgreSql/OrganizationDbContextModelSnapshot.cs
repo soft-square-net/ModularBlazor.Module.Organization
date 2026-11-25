@@ -23,100 +23,110 @@ namespace soft.square.net.WebApi.Modules.Organization.Infrastructure.Data.Migrat
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("soft.square.net.WebApi.Data.Messaging.InboxMessage", b =>
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.FeedAggregate.FeedEntry", b =>
                 {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
 
-                    b.Property<DateTimeOffset>("ProcessedAt")
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Data")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Source")
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Subject")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
                     b.Property<string>("Type")
                         .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("UnitPath")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ProcessedAt");
+                    b.HasIndex("OrgId", "Id");
 
-                    b.ToTable("integration_inbox", "organization");
+                    b.ToTable("feed", "organization");
                 });
 
-            modelBuilder.Entity("soft.square.net.WebApi.Data.Messaging.OutboxMessage", b =>
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.MembershipAggregate.Membership", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<int>("Attempts")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Envelope")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("LastError")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<DateTimeOffset>("OccurredAt")
+                    b.Property<DateTimeOffset>("From")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTimeOffset?>("SentAt")
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PersonId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("PositionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Primary")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset?>("To")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("TenantId")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                    b.Property<Guid>("UnitId")
+                        .HasColumnType("uuid");
 
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("SentAt", "OccurredAt");
+                    b.HasIndex("PersonId");
 
-                    b.ToTable("integration_outbox", "organization");
+                    b.HasIndex("PositionId");
+
+                    b.HasIndex("OrgId", "UnitId");
+
+                    b.ToTable("memberships", "organization");
                 });
 
-            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.NoteAggregate.Note", b =>
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.OrgAggregate.Org", b =>
                 {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Body")
-                        .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("CreatedBy")
+                    b.Property<string>("Key")
                         .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
 
-                    b.Property<string>("TenantId")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("Title")
+                    b.Property<string>("NameAr")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
+
+                    b.Property<string>("NameEn")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("RootUnitId")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -127,9 +137,501 @@ namespace soft.square.net.WebApi.Modules.Organization.Infrastructure.Data.Migrat
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TenantId");
+                    b.HasIndex("Key")
+                        .IsUnique();
 
-                    b.ToTable("notes", "organization");
+                    b.ToTable("orgs", "organization");
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.OrgAggregate.OrgAdmin", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Issuer")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid?>("OrgId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrgId");
+
+                    b.HasIndex("Subject");
+
+                    b.ToTable("org_admins", "organization");
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.OrgUnitAggregate.OrgUnit", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Binding")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Depth")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("NameAr")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("NameEn")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ParentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Path")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("SeedId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("TimeZone")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("TypeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TypeKey")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.Property<string>("_tags")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("Tags");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrgId", "ParentId");
+
+                    b.HasIndex("OrgId", "Path");
+
+                    b.ToTable("units", "organization");
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.OrgUnitAggregate.UnitCategory", b =>
+                {
+                    b.Property<Guid>("UnitId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CategoryId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("UnitId", "CategoryId");
+
+                    b.HasIndex("CategoryId");
+
+                    b.ToTable("unit_categories", "organization");
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.PersonAggregate.Person", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("EmployeeNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateOnly?>("HiredOn")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsEmployee")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Issuer")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("JobTitle")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Subject");
+
+                    b.HasIndex("OrgId", "Subject", "Issuer")
+                        .IsUnique();
+
+                    b.ToTable("persons", "organization");
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.PositionAggregate.PositionDefinition", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("NameAr")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("NameEn")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.Property<string>("_permissions")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("Permissions");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrgId", "Key")
+                        .IsUnique();
+
+                    b.ToTable("positions", "organization");
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.TenantLinkAggregate.TenantLink", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("DecidedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FromSeedId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("FromUnitId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("RequestedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("ToSeedId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("ToUnitId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrgId");
+
+                    b.ToTable("tenant_links", "organization");
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.TenantSeedAggregate.SeedStatusEntry", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("ActualDatabaseName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ActualDatabaseServer")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset>("At")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("SeedId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SeedId");
+
+                    b.ToTable("tenant_seed_history", "organization");
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.TenantSeedAggregate.TenantSeed", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ActualDatabaseName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ActualDatabaseServer")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DatabaseName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("DatabaseServer")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("DeploymentId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<long?>("ReportedVersion")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("RootUnitId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("_adminPersonIds")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("AdminPersonIds");
+
+                    b.Property<string>("_hosts")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("Hosts");
+
+                    b.Property<string>("_modules")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("Modules");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrgId");
+
+                    b.HasIndex("RootUnitId")
+                        .IsUnique();
+
+                    b.HasIndex("DeploymentId", "TenantId")
+                        .IsUnique();
+
+                    b.ToTable("tenant_seeds", "organization");
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.UnitTypeAggregate.UnitType", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("HoldsCategories")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("NameAr")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("NameEn")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("_allowedParents")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("AllowedParents");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrgId", "Key")
+                        .IsUnique();
+
+                    b.ToTable("unit_types", "organization");
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.OrgAggregate.OrgAdmin", b =>
+                {
+                    b.HasOne("soft.square.net.WebApi.Modules.Organization.Core.OrgAggregate.Org", null)
+                        .WithMany("Admins")
+                        .HasForeignKey("OrgId")
+                        .OnDelete(DeleteBehavior.Cascade);
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.OrgUnitAggregate.UnitCategory", b =>
+                {
+                    b.HasOne("soft.square.net.WebApi.Modules.Organization.Core.OrgUnitAggregate.OrgUnit", null)
+                        .WithMany("Categories")
+                        .HasForeignKey("UnitId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.TenantSeedAggregate.SeedStatusEntry", b =>
+                {
+                    b.HasOne("soft.square.net.WebApi.Modules.Organization.Core.TenantSeedAggregate.TenantSeed", null)
+                        .WithMany("History")
+                        .HasForeignKey("SeedId")
+                        .OnDelete(DeleteBehavior.Cascade);
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.OrgAggregate.Org", b =>
+                {
+                    b.Navigation("Admins");
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.OrgUnitAggregate.OrgUnit", b =>
+                {
+                    b.Navigation("Categories");
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.TenantSeedAggregate.TenantSeed", b =>
+                {
+                    b.Navigation("History");
                 });
 #pragma warning restore 612, 618
         }

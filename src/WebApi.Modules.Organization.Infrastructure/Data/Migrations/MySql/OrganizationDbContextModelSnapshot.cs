@@ -19,98 +19,108 @@ namespace soft.square.net.WebApi.Modules.Organization.Infrastructure.Data.Migrat
                 .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
 
-            modelBuilder.Entity("soft.square.net.WebApi.Data.Messaging.InboxMessage", b =>
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.FeedAggregate.FeedEntry", b =>
                 {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("char(36)");
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
 
-                    b.Property<DateTime>("ProcessedAt")
+                    b.Property<string>("Data")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<DateTime>("OccurredAt")
                         .HasColumnType("datetime(6)");
 
-                    b.Property<string>("Source")
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("Subject")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("varchar(100)");
 
                     b.Property<string>("Type")
                         .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("varchar(200)");
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("UnitPath")
+                        .HasMaxLength(1024)
+                        .HasColumnType("varchar(1024)");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ProcessedAt");
+                    b.HasIndex("OrgId", "Id");
 
-                    b.ToTable("organization_integration_inbox", (string)null);
+                    b.ToTable("organization_feed", (string)null);
                 });
 
-            modelBuilder.Entity("soft.square.net.WebApi.Data.Messaging.OutboxMessage", b =>
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.MembershipAggregate.Membership", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("char(36)");
 
-                    b.Property<int>("Attempts")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Envelope")
-                        .IsRequired()
-                        .HasColumnType("longtext");
-
-                    b.Property<string>("LastError")
-                        .HasMaxLength(1000)
-                        .HasColumnType("varchar(1000)");
-
-                    b.Property<DateTime>("OccurredAt")
+                    b.Property<DateTime>("From")
                         .HasColumnType("datetime(6)");
 
-                    b.Property<DateTime?>("SentAt")
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid>("PersonId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid?>("PositionId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<bool>("Primary")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<DateTime?>("To")
                         .HasColumnType("datetime(6)");
 
-                    b.Property<string>("TenantId")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                    b.Property<Guid>("UnitId")
+                        .HasColumnType("char(36)");
 
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("varchar(200)");
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime(6)");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("SentAt", "OccurredAt");
+                    b.HasIndex("PersonId");
 
-                    b.ToTable("organization_integration_outbox", (string)null);
+                    b.HasIndex("PositionId");
+
+                    b.HasIndex("OrgId", "UnitId");
+
+                    b.ToTable("organization_memberships", (string)null);
                 });
 
-            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.NoteAggregate.Note", b =>
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.OrgAggregate.Org", b =>
                 {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    b.Property<string>("Body")
-                        .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("varchar(2000)");
+                    b.Property<Guid>("Id")
+                        .HasColumnType("char(36)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime(6)");
 
-                    b.Property<string>("CreatedBy")
+                    b.Property<string>("Key")
                         .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("varchar(128)");
+                        .HasMaxLength(40)
+                        .HasColumnType("varchar(40)");
 
-                    b.Property<string>("TenantId")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
-
-                    b.Property<string>("Title")
+                    b.Property<string>("NameAr")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("varchar(200)");
+
+                    b.Property<string>("NameEn")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<Guid>("RootUnitId")
+                        .HasColumnType("char(36)");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime(6)");
@@ -121,9 +131,497 @@ namespace soft.square.net.WebApi.Modules.Organization.Infrastructure.Data.Migrat
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TenantId");
+                    b.HasIndex("Key")
+                        .IsUnique();
 
-                    b.ToTable("organization_notes", (string)null);
+                    b.ToTable("organization_orgs", (string)null);
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.OrgAggregate.OrgAdmin", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Issuer")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)");
+
+                    b.Property<Guid?>("OrgId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrgId");
+
+                    b.HasIndex("Subject");
+
+                    b.ToTable("organization_org_admins", (string)null);
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.OrgUnitAggregate.OrgUnit", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("Binding")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("Depth")
+                        .HasColumnType("int");
+
+                    b.Property<string>("NameAr")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<string>("NameEn")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid?>("ParentId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("Path")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("varchar(1024)");
+
+                    b.Property<string>("SeedId")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<string>("TimeZone")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<Guid>("TypeId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("TypeKey")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("varchar(40)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.Property<string>("_tags")
+                        .IsRequired()
+                        .HasColumnType("longtext")
+                        .HasColumnName("Tags");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrgId", "ParentId");
+
+                    b.HasIndex("OrgId", "Path");
+
+                    b.ToTable("organization_units", (string)null);
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.OrgUnitAggregate.UnitCategory", b =>
+                {
+                    b.Property<Guid>("UnitId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("CategoryId")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.HasKey("UnitId", "CategoryId");
+
+                    b.HasIndex("CategoryId");
+
+                    b.ToTable("organization_unit_categories", (string)null);
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.PersonAggregate.Person", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)");
+
+                    b.Property<string>("EmployeeNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<DateOnly?>("HiredOn")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsEmployee")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("Issuer")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)");
+
+                    b.Property<string>("JobTitle")
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Subject");
+
+                    b.HasIndex("OrgId", "Subject", "Issuer")
+                        .IsUnique();
+
+                    b.ToTable("organization_persons", (string)null);
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.PositionAggregate.PositionDefinition", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("varchar(40)");
+
+                    b.Property<string>("NameAr")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<string>("NameEn")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.Property<string>("_permissions")
+                        .IsRequired()
+                        .HasColumnType("longtext")
+                        .HasColumnName("Permissions");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrgId", "Key")
+                        .IsUnique();
+
+                    b.ToTable("organization_positions", (string)null);
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.TenantLinkAggregate.TenantLink", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("FromSeedId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<Guid>("FromUnitId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<string>("ToSeedId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<Guid>("ToUnitId")
+                        .HasColumnType("char(36)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrgId");
+
+                    b.ToTable("organization_tenant_links", (string)null);
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.TenantSeedAggregate.SeedStatusEntry", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ActualDatabaseName")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("ActualDatabaseServer")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<DateTime>("At")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("varchar(1000)");
+
+                    b.Property<string>("SeedId")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SeedId");
+
+                    b.ToTable("organization_tenant_seed_history", (string)null);
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.TenantSeedAggregate.TenantSeed", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<string>("ActualDatabaseName")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("ActualDatabaseServer")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("DatabaseName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("DatabaseServer")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("DeploymentId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("varchar(1000)");
+
+                    b.Property<long?>("ReportedVersion")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("RootUnitId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("varchar(40)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("_adminPersonIds")
+                        .IsRequired()
+                        .HasColumnType("longtext")
+                        .HasColumnName("AdminPersonIds");
+
+                    b.Property<string>("_hosts")
+                        .IsRequired()
+                        .HasColumnType("longtext")
+                        .HasColumnName("Hosts");
+
+                    b.Property<string>("_modules")
+                        .IsRequired()
+                        .HasColumnType("longtext")
+                        .HasColumnName("Modules");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrgId");
+
+                    b.HasIndex("RootUnitId")
+                        .IsUnique();
+
+                    b.HasIndex("DeploymentId", "TenantId")
+                        .IsUnique();
+
+                    b.ToTable("organization_tenant_seeds", (string)null);
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.UnitTypeAggregate.UnitType", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("char(36)");
+
+                    b.Property<bool>("HoldsCategories")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("varchar(40)");
+
+                    b.Property<string>("NameAr")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<string>("NameEn")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("_allowedParents")
+                        .IsRequired()
+                        .HasColumnType("longtext")
+                        .HasColumnName("AllowedParents");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrgId", "Key")
+                        .IsUnique();
+
+                    b.ToTable("organization_unit_types", (string)null);
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.OrgAggregate.OrgAdmin", b =>
+                {
+                    b.HasOne("soft.square.net.WebApi.Modules.Organization.Core.OrgAggregate.Org", null)
+                        .WithMany("Admins")
+                        .HasForeignKey("OrgId")
+                        .OnDelete(DeleteBehavior.Cascade);
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.OrgUnitAggregate.UnitCategory", b =>
+                {
+                    b.HasOne("soft.square.net.WebApi.Modules.Organization.Core.OrgUnitAggregate.OrgUnit", null)
+                        .WithMany("Categories")
+                        .HasForeignKey("UnitId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.TenantSeedAggregate.SeedStatusEntry", b =>
+                {
+                    b.HasOne("soft.square.net.WebApi.Modules.Organization.Core.TenantSeedAggregate.TenantSeed", null)
+                        .WithMany("History")
+                        .HasForeignKey("SeedId")
+                        .OnDelete(DeleteBehavior.Cascade);
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.OrgAggregate.Org", b =>
+                {
+                    b.Navigation("Admins");
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.OrgUnitAggregate.OrgUnit", b =>
+                {
+                    b.Navigation("Categories");
+                });
+
+            modelBuilder.Entity("soft.square.net.WebApi.Modules.Organization.Core.TenantSeedAggregate.TenantSeed", b =>
+                {
+                    b.Navigation("History");
                 });
 #pragma warning restore 612, 618
         }

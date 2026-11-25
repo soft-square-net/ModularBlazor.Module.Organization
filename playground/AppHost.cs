@@ -68,21 +68,19 @@ var webApi = builder.AddProject<Projects.WebApi>("webapi", launchProfileName: nu
     .WithEnvironment("Auth__Authority", Issuer)
     .WithEnvironment("Auth__Audience", "modular-webapi")
     .WithEnvironment("Cors__AllowedOrigins__0", ClientOrigin)
-    // Development only (Access:DevGrants): the module's permissions for the dev accounts of tenant acme, written as
-    // ordinary grants (source "dev") the first time each one calls the API there.
-    .WithEnvironment("Access__DevGrants__0__Tenant", "acme")
-    .WithEnvironment("Access__DevGrants__0__Email", "acme-admin@modular.local")
-    .WithEnvironment("Access__DevGrants__0__Permissions__0", "organization.*")
-    .WithEnvironment("Access__DevGrants__1__Tenant", "acme")
-    .WithEnvironment("Access__DevGrants__1__Email", "editor@modular.local")
-    .WithEnvironment("Access__DevGrants__1__Permissions__0", "organization.read")
+    // This deployment runs the central Organization service (Organization:Mode, a host override of the module's
+    // settings): the platform-level database "organization" on the TenantStore server, created on first start, and the
+    // management API under /api/organization, trusting the dev identity service. It authorizes from its own data:
+    // sign in as the dev platform admin (admin@modular.local) to create the first org.
+    .WithEnvironment("Modules__Settings__organization__Organization__Mode", "Central")
+    .WithEnvironment("Modules__Settings__organization__Organization__TrustedIssuers", Issuer)
     .WaitFor(identity)
     .WithHttpHealthCheck("/health");
 if (mode == "dev")
 {
     // The server part from its build output (Modules:Local), and the client parts too (the client-modules module's
     // ClientModules:Local, set through a host override): every start installs what changed, the API client first.
-    // Sign in on http://localhost:5070 as acme-admin@modular.local and open Organization (/organization).
+    // Sign in on http://localhost:5070 as admin@modular.local and open Organization (/organization).
     const string ClientLocal = "Modules__Settings__client-modules__ClientModules__Local__";
     webApi.WithEnvironment("Modules__Local__organization", Metadata("ModuleOutput"))
         .WithEnvironment(ClientLocal + "WebApi.Modules.Organization.Client", Metadata("ApiClientOutput"))

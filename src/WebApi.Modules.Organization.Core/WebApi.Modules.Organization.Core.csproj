@@ -2,14 +2,19 @@
   <Sdk Name="soft.square.net.ModularBlazor.Module.Sdk" />
 
   <!--
-    Core (the domain model): aggregates, their rules and their specifications, one folder per aggregate
-    (NoteAggregate). No references to other layers.
-    The Module SDK compiles it against WebApi.SharedKernel (AggregateRoot, DomainException, IRepository) and
-    Ardalis.Specification, both provided by the host. The name does not end in .Domain, so the layer is set here.
+    Core (the domain model of the central Organization service): orgs (customers), unit types, the unit tree, persons,
+    memberships, positions, tenant seeds, tenant links and the change feed, one folder per aggregate with its
+    specifications. Its rules throw DomainException (the endpoints answer 409).
+    References Organization.Contracts only, for the shared vocabulary (unit paths, binding/seed/link states), which
+    has no dependencies. The Module SDK compiles it against WebApi.SharedKernel and Ardalis.Specification (host).
   -->
 
   <PropertyGroup>
     <ModuleLayer>Domain</ModuleLayer>
   </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Organization.Contracts\Organization.Contracts.csproj" />
+  </ItemGroup>
 
 </Project>

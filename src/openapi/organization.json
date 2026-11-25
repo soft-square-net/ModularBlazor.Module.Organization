@@ -2,7 +2,7 @@
   "openapi": "3.1.1",
   "info": {
     "title": "Organization",
-    "description": "Organization: notes per tenant (the template's example; replace with the module's own features).",
+    "description": "Organization: customers, the unit tree (Org > Sector > Department > Section), members, positions, tenant seeds and links. Central or Connector mode.",
     "version": "0.1.0"
   },
   "servers": [
@@ -11,40 +11,23 @@
     }
   ],
   "paths": {
-    "/api/organization/notes": {
+    "/api/organization/orgs": {
       "get": {
         "tags": [
-          "Notes"
+          "Orgs"
         ],
-        "summary": "One page of notes, newest first.",
-        "operationId": "Organization_ListNotes",
-        "parameters": [
-          {
-            "name": "page",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "default": 1
-            }
-          },
-          {
-            "name": "pageSize",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "default": 20
-            }
-          }
-        ],
+        "summary": "The orgs the caller administers or belongs to (all of them for a platform admin).",
+        "operationId": "Organization_ListOrgs",
         "responses": {
           "200": {
             "description": "OK",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NotePage"
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OrgDto"
+                  }
                 }
               }
             }
@@ -53,14 +36,15 @@
       },
       "post": {
         "tags": [
-          "Notes"
+          "Orgs"
         ],
-        "operationId": "Organization_CreateNote",
+        "summary": "A new customer with its root unit, the default unit types and positions (platform admins).",
+        "operationId": "Organization_CreateOrg",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NewNote"
+                "$ref": "#/components/schemas/CreateOrgRequest"
               }
             }
           },
@@ -72,7 +56,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NoteDto"
+                  "$ref": "#/components/schemas/OrgDto"
                 }
               }
             }
@@ -80,70 +64,20 @@
         }
       }
     },
-    "/api/organization/notes/search": {
+    "/api/organization/orgs/{orgId}": {
       "get": {
         "tags": [
-          "Notes"
+          "Orgs"
         ],
-        "summary": "Notes whose title or body contains the text (at least 2 characters), ignoring case.",
-        "operationId": "Organization_SearchNotes",
+        "operationId": "Organization_GetOrg",
         "parameters": [
           {
-            "name": "text",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "default": 1
-            }
-          },
-          {
-            "name": "pageSize",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "default": 20
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/NotePage"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/organization/notes/{id}": {
-      "get": {
-        "tags": [
-          "Notes"
-        ],
-        "operationId": "Organization_GetNote",
-        "parameters": [
-          {
-            "name": "id",
+            "name": "orgId",
             "in": "path",
             "required": true,
             "schema": {
-              "pattern": "^-?(?:0|[1-9]\\d*)$",
-              "type": "integer",
-              "format": "int32"
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
@@ -153,7 +87,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NoteDto"
+                  "$ref": "#/components/schemas/OrgDto"
                 }
               }
             }
@@ -162,18 +96,17 @@
       },
       "put": {
         "tags": [
-          "Notes"
+          "Orgs"
         ],
-        "operationId": "Organization_EditNote",
+        "operationId": "Organization_UpdateOrg",
         "parameters": [
           {
-            "name": "id",
+            "name": "orgId",
             "in": "path",
             "required": true,
             "schema": {
-              "pattern": "^-?(?:0|[1-9]\\d*)$",
-              "type": "integer",
-              "format": "int32"
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
@@ -181,7 +114,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NoteEdit"
+                "$ref": "#/components/schemas/UpdateOrgRequest"
               }
             }
           },
@@ -193,7 +126,286 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NoteDto"
+                  "$ref": "#/components/schemas/OrgDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/organization/orgs/{orgId}/admins": {
+      "put": {
+        "tags": [
+          "Orgs"
+        ],
+        "summary": "Replaces the org's customer admins.",
+        "operationId": "Organization_SetOrgAdmins",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetOrgAdminsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrgDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/organization/orgs/{orgId}/unit-types": {
+      "get": {
+        "tags": [
+          "Unit types"
+        ],
+        "operationId": "Organization_ListUnitTypes",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UnitTypeDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Unit types"
+        ],
+        "summary": "A new unit type with the types it may sit under (customer admins).",
+        "operationId": "Organization_CreateUnitType",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUnitTypeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitTypeDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/organization/orgs/{orgId}/units": {
+      "get": {
+        "tags": [
+          "Units"
+        ],
+        "summary": "The org's units in tree order.",
+        "operationId": "Organization_ListUnits",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OrgUnitDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Units"
+        ],
+        "summary": "A unit under a parent; a Section needs at least one post category.",
+        "operationId": "Organization_CreateUnit",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUnitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrgUnitDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/organization/orgs/{orgId}/units/{unitId}": {
+      "get": {
+        "tags": [
+          "Units"
+        ],
+        "operationId": "Organization_GetUnit",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrgUnitDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Units"
+        ],
+        "operationId": "Organization_UpdateUnit",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUnitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrgUnitDto"
                 }
               }
             }
@@ -202,30 +414,817 @@
       },
       "delete": {
         "tags": [
-          "Notes"
+          "Units"
         ],
-        "operationId": "Organization_DeleteNote",
+        "summary": "Removes a unit with no children, no members and no tenant.",
+        "operationId": "Organization_RemoveUnit",
         "parameters": [
           {
-            "name": "id",
+            "name": "orgId",
             "in": "path",
             "required": true,
             "schema": {
-              "pattern": "^-?(?:0|[1-9]\\d*)$",
-              "type": "integer",
-              "format": "int32"
+              "type": "string",
+              "format": "uuid"
             }
           },
           {
-            "name": "version",
-            "in": "query",
+            "name": "unitId",
+            "in": "path",
             "required": true,
             "schema": {
-              "type": "integer",
-              "format": "int32"
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/organization/orgs/{orgId}/units/{unitId}/tenant": {
+      "get": {
+        "tags": [
+          "Units"
+        ],
+        "summary": "The tenant the unit lives in: its own or its nearest ancestor's.",
+        "operationId": "Organization_GetUnitTenant",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitTenantDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/organization/orgs/{orgId}/units/{unitId}/move": {
+      "post": {
+        "tags": [
+          "Units"
+        ],
+        "summary": "Moves the unit and its subtree under another parent.",
+        "operationId": "Organization_MoveUnit",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveUnitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrgUnitDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/organization/orgs/{orgId}/persons": {
+      "get": {
+        "tags": [
+          "Persons"
+        ],
+        "operationId": "Organization_ListPersons",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PersonDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Persons"
+        ],
+        "operationId": "Organization_CreatePerson",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePersonRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/organization/orgs/{orgId}/persons/{personId}": {
+      "put": {
+        "tags": [
+          "Persons"
+        ],
+        "operationId": "Organization_UpdatePerson",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "personId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePersonRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/organization/orgs/{orgId}/memberships": {
+      "get": {
+        "tags": [
+          "Memberships"
+        ],
+        "summary": "The org's memberships, optionally of one unit and/or one person.",
+        "operationId": "Organization_ListMemberships",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "unitId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "personId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MembershipDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Memberships"
+        ],
+        "operationId": "Organization_CreateMembership",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMembershipRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MembershipDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/organization/orgs/{orgId}/memberships/{membershipId}": {
+      "put": {
+        "tags": [
+          "Memberships"
+        ],
+        "operationId": "Organization_UpdateMembership",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "membershipId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMembershipRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MembershipDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Memberships"
+        ],
+        "operationId": "Organization_RemoveMembership",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "membershipId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/organization/orgs/{orgId}/positions": {
+      "get": {
+        "tags": [
+          "Positions"
+        ],
+        "operationId": "Organization_ListPositions",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PositionDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Positions"
+        ],
+        "operationId": "Organization_CreatePosition",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePositionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PositionDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/organization/orgs/{orgId}/positions/{positionId}": {
+      "put": {
+        "tags": [
+          "Positions"
+        ],
+        "operationId": "Organization_UpdatePosition",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "positionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePositionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PositionDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/organization/orgs/{orgId}/seeds": {
+      "get": {
+        "tags": [
+          "Tenant seeds"
+        ],
+        "summary": "The org's tenant seeds with their status as the hosts report it.",
+        "operationId": "Organization_ListSeeds",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TenantSeedDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Tenant seeds"
+        ],
+        "summary": "A tenant for a unit; its admins become unit admins of it (customer admins).",
+        "operationId": "Organization_CreateSeed",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSeedRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantSeedDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/organization/orgs/{orgId}/seeds/{seedId}": {
+      "put": {
+        "tags": [
+          "Tenant seeds"
+        ],
+        "summary": "A new version of the seed, which the host reconciles again.",
+        "operationId": "Organization_UpdateSeed",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "seedId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSeedRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantSeedDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/organization/orgs/{orgId}/events": {
+      "get": {
+        "tags": [
+          "Feed and links"
+        ],
+        "summary": "The org's org.* events after a cursor, in order (connectors and customer admins).",
+        "operationId": "Organization_ReadFeed",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "default": 0
+            }
+          },
+          {
+            "name": "take",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedPage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/organization/orgs/{orgId}/links": {
+      "get": {
+        "tags": [
+          "Feed and links"
+        ],
+        "summary": "The org's links between sibling tenants (skeleton: states only).",
+        "operationId": "Organization_ListLinks",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TenantLinkDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/organization/seeds": {
+      "get": {
+        "tags": [
+          "Tenant seeds"
+        ],
+        "summary": "The seeds of a deployment, as its connector pulls them (service clients).",
+        "operationId": "Organization_ListDeploymentSeeds",
+        "parameters": [
+          {
+            "name": "deployment",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DeploymentSeedDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/organization/seeds/{seedId}/reports": {
+      "post": {
+        "tags": [
+          "Tenant seeds"
+        ],
+        "summary": "The host's outcome for one version of a seed (service clients).",
+        "operationId": "Organization_ReportSeed",
+        "parameters": [
+          {
+            "name": "seedId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeedReportRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "204": {
             "description": "No Content"
@@ -236,56 +1235,697 @@
   },
   "components": {
     "schemas": {
-      "NewNote": {
+      "CreateMembershipRequest": {
         "required": [
-          "title",
-          "body"
+          "personId",
+          "unitId"
         ],
         "type": "object",
         "properties": {
-          "title": {
+          "personId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "positionId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "from": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "to": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "primary": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "CreateOrgRequest": {
+        "required": [
+          "key",
+          "nameEn",
+          "nameAr"
+        ],
+        "type": "object",
+        "properties": {
+          "key": {
             "type": "string"
           },
-          "body": {
+          "nameEn": {
+            "type": "string"
+          },
+          "nameAr": {
+            "type": "string"
+          },
+          "admins": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/OrgAdminDto"
+            }
+          }
+        }
+      },
+      "CreatePersonRequest": {
+        "required": [
+          "issuer",
+          "subject",
+          "displayName"
+        ],
+        "type": "object",
+        "properties": {
+          "issuer": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "email": {
             "type": [
               "null",
               "string"
             ]
+          },
+          "employee": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EmployeeProfileDto"
+              }
+            ]
           }
         }
       },
-      "NoteDto": {
+      "CreatePositionRequest": {
+        "required": [
+          "key",
+          "nameEn",
+          "nameAr",
+          "permissions"
+        ],
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "nameEn": {
+            "type": "string"
+          },
+          "nameAr": {
+            "type": "string"
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "CreateSeedRequest": {
+        "required": [
+          "rootUnitId",
+          "deploymentId",
+          "tenantId",
+          "name",
+          "hosts",
+          "databaseServer",
+          "databaseName"
+        ],
+        "type": "object",
+        "properties": {
+          "rootUnitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "deploymentId": {
+            "type": "string"
+          },
+          "tenantId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "hosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "databaseServer": {
+            "type": "string"
+          },
+          "databaseName": {
+            "type": "string"
+          },
+          "modules": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "adminPersonIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "CreateUnitRequest": {
+        "required": [
+          "parentId",
+          "typeKey",
+          "nameEn",
+          "nameAr"
+        ],
+        "type": "object",
+        "properties": {
+          "parentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "typeKey": {
+            "type": "string"
+          },
+          "nameEn": {
+            "type": "string"
+          },
+          "nameAr": {
+            "type": "string"
+          },
+          "tags": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "timeZone": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "categories": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "CreateUnitTypeRequest": {
+        "required": [
+          "key",
+          "nameEn",
+          "nameAr",
+          "allowedParents",
+          "holdsCategories"
+        ],
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "nameEn": {
+            "type": "string"
+          },
+          "nameAr": {
+            "type": "string"
+          },
+          "allowedParents": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "holdsCategories": {
+            "type": "boolean"
+          },
+          "order": {
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          }
+        }
+      },
+      "DeploymentSeedDto": {
         "required": [
           "id",
-          "title",
-          "body",
-          "createdBy",
-          "createdAt",
-          "updatedAt",
+          "version",
+          "deploymentId",
+          "tenantId",
+          "name",
+          "hosts",
+          "databaseServer",
+          "databaseName",
+          "modules",
+          "admins",
+          "orgId",
+          "rootUnitId"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "deploymentId": {
+            "type": "string"
+          },
+          "tenantId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "hosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "databaseServer": {
+            "type": "string"
+          },
+          "databaseName": {
+            "type": "string"
+          },
+          "modules": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "admins": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "orgId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "rootUnitId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "EmployeeProfileDto": {
+        "required": [
+          "employeeNumber",
+          "jobTitle",
+          "hiredOn"
+        ],
+        "type": "object",
+        "properties": {
+          "employeeNumber": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "jobTitle": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "hiredOn": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date"
+          }
+        }
+      },
+      "FeedEntryDto": {
+        "required": [
+          "sequence",
+          "orgId",
+          "type",
+          "subject",
+          "unitPath",
+          "occurredAt",
+          "data"
+        ],
+        "type": "object",
+        "properties": {
+          "sequence": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "orgId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "unitPath": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "data": {
+            "$ref": "#/components/schemas/JsonElement"
+          }
+        }
+      },
+      "FeedPage": {
+        "required": [
+          "entries",
+          "next",
+          "more"
+        ],
+        "type": "object",
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FeedEntryDto"
+            }
+          },
+          "next": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "more": {
+            "type": "boolean"
+          }
+        }
+      },
+      "JsonElement": { },
+      "MembershipDto": {
+        "required": [
+          "id",
+          "orgId",
+          "personId",
+          "unitId",
+          "positionId",
+          "positionKey",
+          "from",
+          "to",
+          "primary"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orgId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "personId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "positionId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "positionKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "to": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "primary": {
+            "type": "boolean"
+          }
+        }
+      },
+      "MoveUnitRequest": {
+        "required": [
+          "version",
+          "newParentId"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "newParentId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "OrgAdminDto": {
+        "required": [
+          "issuer",
+          "subject"
+        ],
+        "type": "object",
+        "properties": {
+          "issuer": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          }
+        }
+      },
+      "OrgDto": {
+        "required": [
+          "id",
+          "key",
+          "nameEn",
+          "nameAr",
+          "rootUnitId",
+          "admins",
+          "version",
+          "createdAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "key": {
+            "type": "string"
+          },
+          "nameEn": {
+            "type": "string"
+          },
+          "nameAr": {
+            "type": "string"
+          },
+          "rootUnitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "admins": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrgAdminDto"
+            }
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "OrgUnitDto": {
+        "required": [
+          "id",
+          "orgId",
+          "parentId",
+          "typeKey",
+          "path",
+          "nameEn",
+          "nameAr",
+          "tags",
+          "timeZone",
+          "categories",
+          "tenantBinding",
+          "version",
+          "updatedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orgId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "parentId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "typeKey": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "nameEn": {
+            "type": "string"
+          },
+          "nameAr": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "timeZone": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tenantBinding": {
+            "$ref": "#/components/schemas/TenantBindingDto"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PersonDto": {
+        "required": [
+          "id",
+          "orgId",
+          "issuer",
+          "subject",
+          "displayName",
+          "email",
+          "employee",
           "version"
         ],
         "type": "object",
         "properties": {
           "id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "title": {
-            "type": "string"
-          },
-          "body": {
-            "type": "string"
-          },
-          "createdBy": {
-            "type": "string"
-          },
-          "createdAt": {
             "type": "string",
-            "format": "date-time"
+            "format": "uuid"
           },
-          "updatedAt": {
+          "orgId": {
             "type": "string",
-            "format": "date-time"
+            "format": "uuid"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "email": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "employee": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EmployeeProfileDto"
+              }
+            ]
           },
           "version": {
             "type": "integer",
@@ -293,22 +1933,87 @@
           }
         }
       },
-      "NoteEdit": {
+      "PlacementDto": {
+        "required": [
+          "databaseServer",
+          "databaseName"
+        ],
+        "type": "object",
+        "properties": {
+          "databaseServer": {
+            "type": "string"
+          },
+          "databaseName": {
+            "type": "string"
+          }
+        }
+      },
+      "PositionDto": {
+        "required": [
+          "id",
+          "orgId",
+          "key",
+          "nameEn",
+          "nameAr",
+          "permissions",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orgId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "key": {
+            "type": "string"
+          },
+          "nameEn": {
+            "type": "string"
+          },
+          "nameAr": {
+            "type": "string"
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "SeedReportRequest": {
         "required": [
           "version",
-          "title",
-          "body"
+          "status"
         ],
         "type": "object",
         "properties": {
           "version": {
             "type": "integer",
-            "format": "int32"
+            "format": "int64"
           },
-          "title": {
-            "type": "string"
+          "status": {
+            "$ref": "#/components/schemas/SeedState"
           },
-          "body": {
+          "actualPlacement": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PlacementDto"
+              }
+            ]
+          },
+          "reason": {
             "type": [
               "null",
               "string"
@@ -316,32 +2021,549 @@
           }
         }
       },
-      "NotePage": {
+      "SeedState": {
+        "enum": [
+          "Requested",
+          "Provisioning",
+          "Provisioned",
+          "Adjusted",
+          "Rejected",
+          "Failed"
+        ],
+        "type": "string"
+      },
+      "SeedStatusEntryDto": {
         "required": [
-          "items",
-          "page",
-          "pageSize",
-          "total"
+          "at",
+          "version",
+          "status",
+          "reason",
+          "actualPlacement"
         ],
         "type": "object",
         "properties": {
-          "items": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SeedState"
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "actualPlacement": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PlacementDto"
+              }
+            ]
+          }
+        }
+      },
+      "SetOrgAdminsRequest": {
+        "required": [
+          "admins"
+        ],
+        "type": "object",
+        "properties": {
+          "admins": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/NoteDto"
+              "$ref": "#/components/schemas/OrgAdminDto"
+            }
+          }
+        }
+      },
+      "TenantBindingDto": {
+        "required": [
+          "kind",
+          "seedId"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/TenantBindingKind"
+          },
+          "seedId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "TenantBindingKind": {
+        "enum": [
+          "Inherit",
+          "OwnTenant"
+        ],
+        "type": "string"
+      },
+      "TenantLinkDto": {
+        "required": [
+          "id",
+          "orgId",
+          "fromSeedId",
+          "fromUnitId",
+          "toSeedId",
+          "toUnitId",
+          "state",
+          "requestedAt",
+          "decidedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orgId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "fromSeedId": {
+            "type": "string"
+          },
+          "fromUnitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "toSeedId": {
+            "type": "string"
+          },
+          "toUnitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "$ref": "#/components/schemas/TenantLinkState"
+          },
+          "requestedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "decidedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "TenantLinkState": {
+        "enum": [
+          "Requested",
+          "Active",
+          "Declined",
+          "Revoked"
+        ],
+        "type": "string"
+      },
+      "TenantSeedDto": {
+        "required": [
+          "id",
+          "orgId",
+          "rootUnitId",
+          "version",
+          "deploymentId",
+          "tenantId",
+          "name",
+          "hosts",
+          "databaseServer",
+          "databaseName",
+          "modules",
+          "adminPersonIds",
+          "status",
+          "reason",
+          "reportedVersion",
+          "actualPlacement",
+          "history"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "orgId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "rootUnitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "deploymentId": {
+            "type": "string"
+          },
+          "tenantId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "hosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
             }
           },
-          "page": {
+          "databaseServer": {
+            "type": "string"
+          },
+          "databaseName": {
+            "type": "string"
+          },
+          "modules": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "adminPersonIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "status": {
+            "$ref": "#/components/schemas/SeedState"
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "reportedVersion": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "actualPlacement": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PlacementDto"
+              }
+            ]
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SeedStatusEntryDto"
+            }
+          }
+        }
+      },
+      "UnitTenantDto": {
+        "required": [
+          "unitId",
+          "seedId",
+          "ownerUnitId",
+          "deploymentId",
+          "tenantId"
+        ],
+        "type": "object",
+        "properties": {
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "seedId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "ownerUnitId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "deploymentId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "tenantId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "UnitTypeDto": {
+        "required": [
+          "id",
+          "orgId",
+          "key",
+          "nameEn",
+          "nameAr",
+          "allowedParents",
+          "holdsCategories",
+          "order"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orgId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "key": {
+            "type": "string"
+          },
+          "nameEn": {
+            "type": "string"
+          },
+          "nameAr": {
+            "type": "string"
+          },
+          "allowedParents": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "holdsCategories": {
+            "type": "boolean"
+          },
+          "order": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "UpdateMembershipRequest": {
+        "required": [
+          "positionId",
+          "from",
+          "to",
+          "primary"
+        ],
+        "type": "object",
+        "properties": {
+          "positionId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "to": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "primary": {
+            "type": "boolean"
+          }
+        }
+      },
+      "UpdateOrgRequest": {
+        "required": [
+          "version",
+          "nameEn",
+          "nameAr"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
             "type": "integer",
             "format": "int32"
           },
-          "pageSize": {
+          "nameEn": {
+            "type": "string"
+          },
+          "nameAr": {
+            "type": "string"
+          }
+        }
+      },
+      "UpdatePersonRequest": {
+        "required": [
+          "version",
+          "displayName"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
             "type": "integer",
             "format": "int32"
           },
-          "total": {
+          "displayName": {
+            "type": "string"
+          },
+          "email": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "employee": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EmployeeProfileDto"
+              }
+            ]
+          }
+        }
+      },
+      "UpdatePositionRequest": {
+        "required": [
+          "version",
+          "nameEn",
+          "nameAr",
+          "permissions"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
             "type": "integer",
             "format": "int32"
+          },
+          "nameEn": {
+            "type": "string"
+          },
+          "nameAr": {
+            "type": "string"
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "UpdateSeedRequest": {
+        "required": [
+          "version",
+          "name",
+          "hosts",
+          "databaseServer",
+          "databaseName"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "hosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "databaseServer": {
+            "type": "string"
+          },
+          "databaseName": {
+            "type": "string"
+          },
+          "modules": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "adminPersonIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "UpdateUnitRequest": {
+        "required": [
+          "version",
+          "nameEn",
+          "nameAr"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "nameEn": {
+            "type": "string"
+          },
+          "nameAr": {
+            "type": "string"
+          },
+          "tags": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "timeZone": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "categories": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
           }
         }
       }
@@ -377,7 +2599,28 @@
   ],
   "tags": [
     {
-      "name": "Notes"
+      "name": "Orgs"
+    },
+    {
+      "name": "Unit types"
+    },
+    {
+      "name": "Units"
+    },
+    {
+      "name": "Persons"
+    },
+    {
+      "name": "Memberships"
+    },
+    {
+      "name": "Positions"
+    },
+    {
+      "name": "Tenant seeds"
+    },
+    {
+      "name": "Feed and links"
     }
   ]
 }
