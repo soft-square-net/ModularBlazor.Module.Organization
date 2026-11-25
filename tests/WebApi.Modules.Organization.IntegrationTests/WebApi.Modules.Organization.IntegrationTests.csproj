@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Integration tests of Infrastructure: the OrganizationDbContext mappings and the specifications against a real
+       relational database (SQLite in memory), through the platform's repositories. -->
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.14" />
+    <!-- The host-shared data layer (EF Core, the platform repositories), which the module compiles against only. -->
+    <PackageReference Include="soft.square.net.WebApi.Data" Version="$(ModularBlazorPlatformVersion)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\WebApi.Modules.Organization.Infrastructure\WebApi.Modules.Organization.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\WebApi.Modules.Organization.UseCases\WebApi.Modules.Organization.UseCases.csproj" />
+  </ItemGroup>
+
+</Project>
