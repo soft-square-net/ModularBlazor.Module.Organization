@@ -129,6 +129,8 @@ public sealed class MembershipConfiguration : IEntityTypeConfiguration<Membershi
         membership.HasIndex(m => new { m.OrgId, m.UnitId });
         membership.HasIndex(m => m.PersonId);
         membership.HasIndex(m => m.PositionId);
+        membership.Property(m => m.SeedId).HasMaxLength(TenantSeed.IdMaxLength);
+        membership.HasIndex(m => m.SeedId);
     }
 }
 

@@ -21,10 +21,17 @@ public sealed class Membership : AggregateRoot<Guid>
     public bool Primary { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
 
-    public static Membership Create(Person person, OrgUnit unit, PositionDefinition? position, DateTimeOffset from, DateTimeOffset? to, bool primary, DateTimeOffset now)
+    /// <summary>
+    /// The tenant seed whose admin list created this membership (a unit admin of the seed's root unit), or null when
+    /// someone added it. The seed removes only its own memberships when a person leaves its admin list.
+    /// </summary>
+    public string? SeedId { get; private set; }
+
+    public static Membership Create(Person person, OrgUnit unit, PositionDefinition? position, DateTimeOffset from, DateTimeOffset? to, bool primary, DateTimeOffset now,
+        string? seedId = null)
     {
         if (person.OrgId != unit.OrgId) throw new DomainException("The person and the unit belong to different orgs.");
-        var membership = new Membership { Id = Guid.CreateVersion7(), OrgId = unit.OrgId, PersonId = person.Id, UnitId = unit.Id };
+        var membership = new Membership { Id = Guid.CreateVersion7(), OrgId = unit.OrgId, PersonId = person.Id, UnitId = unit.Id, SeedId = seedId };
         membership.Set(position, from, to, primary, now);
         return membership;
     }

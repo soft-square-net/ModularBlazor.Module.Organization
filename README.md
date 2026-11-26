@@ -9,9 +9,10 @@ get a tenant of their own.
 The module runs in one of two modes (setting `Organization:Mode`):
 
 - **Central** (one deployment, the Organization service): owns the platform-level `organization` database and the
-  management API below. This is what P1-1 builds.
-- **Connector** (the default, every other deployment): reads the central service and keeps a replica per tenant. It
-  registers nothing yet; that is P1-2.
+  management API below. It runs the connector too, for its own tenants.
+- **Connector** (the default, every other deployment): pulls the central service's seeds and feeds into a replica in
+  each tenant's database, serves the seeds to the host, writes the positions' grants, republishes the `org.*` events
+  locally and serves the tenant's units (see "The connector").
 
 ## Layout
 
@@ -64,12 +65,53 @@ Tokens are accepted only from `Organization:TrustedIssuers` (comma-separated; em
 | `GET/POST /orgs/{orgId}/memberships`, `PUT/DELETE .../memberships/{membershipId}` | a person in a unit, with an optional position and dates; one primary per person |
 | `GET/POST /orgs/{orgId}/positions`, `PUT .../positions/{positionId}` | position definitions and their permissions |
 | `GET/POST /orgs/{orgId}/seeds`, `PUT .../seeds/{seedId}` | tenant seeds: a unit that gets its own tenant in a deployment; each edit is a new version |
-| `GET /seeds?deploymentId=`, `POST /seeds/{seedId}/reports` | a deployment's seeds and its connector's status reports (per version, with history) |
+| `GET /seeds?deployment=`, `POST /seeds/{seedId}/reports` | a deployment's seeds and its connector's status reports (per version, with history) |
 | `GET /orgs/{orgId}/events?after=&take=` | the org's `org.*` v1 event feed, written in the same save as each change |
 | `GET /orgs/{orgId}/links` | tenant links (skeleton) |
 
 Every write takes the item's `version` and answers 409 if it changed since. Other modules use the
 `Organization.Contracts` package: its `UnitScopes.For(path)` gives the `unit:{id}` scope of every unit on a path.
+
+## The connector
+
+Every deployment runs it; it is active once `Organization:CentralUrl` names the central service's module route
+(`https://central.example/api/organization/`).
+
+- **Service client.** It calls the central service with a client-credentials token: `Organization:TokenEndpoint`,
+  `Organization:ClientId` (one of the central service's `Organization:ServiceClients`), `Organization:ClientScope`,
+  and `Organization:ClientSecret`. Keep the secret out of the module catalog: set it in the host's configuration as
+  `Modules:Settings:organization:Organization:ClientSecret`.
+- **Seeds.** It is the platform's `ITenantSeedSource`: the host's reconciler pulls the deployment's seeds through it
+  and reports their status back to the central service. Every `Organization:PollInterval` (30 s) it pulls the seeds
+  itself, and when one is new or has a new version it publishes `tenancy.seed-changed.v1` through a tenant's outbox, so
+  the host reconciles at once. The deployment id is `Organization:DeploymentId`, or the one the host's reconciler asks
+  for (`Platform:DeploymentId`).
+- **Replica.** For each active tenant created from one of those seeds, it applies the org's feed to the tenant's
+  replica (schema `organization`, tables `replica_*`): every unit of the org (so moves need no call), the org's
+  persons and positions, the memberships of the tenant's own units (its seed's root unit and below), and the links
+  that name its seed. A new tenant gets its first sync before the module serves it. One replica at a time syncs a
+  tenant (a lock in the tenant's database). When the central service is down, the replicas keep serving.
+- **Feed cursor.** The feed's ids come from an identity column, so an entry can commit after a higher id was read.
+  The connector reads again from a cursor that stays `Organization:FeedOverlap` (1 minute) behind, and applies each
+  entry once (`FeedWindow`). A change that takes longer than the overlap to commit could be missed.
+- **Grants.** Each membership of a tenant unit with a position gives that position's permissions as standing grants
+  on `unit:{id}`, under the grant source `org:{unitId}`, replaced whenever the unit's memberships or the position change.
+- **Events.** It republishes `org.unit-created/updated/moved/removed`, `org.membership-changed`,
+  `org.person-changed`, `org.position-changed` and `org.tenant-link-changed` (v1, the central records as they are)
+  through the replica's outbox, with the unit path, for the tenant's units and the root's ancestors.
+- **Reads.** `IUnitDirectory` (in `Organization.Contracts`) over the replica: the module uses it directly, other
+  modules through `HttpUnitDirectory` and the local API below. A unit's `CategoriesOf` is its own (a Section) or those
+  of the tenant's units below it.
+- **Live.** The manifest declares the platform's `unit` topic kind with `org.read`; the module's `ILiveScopeResolver`
+  gives a `unit:{id}` topic the scopes of the unit and its ancestors, from the replica (never from the client). After
+  each applied change it publishes to the unit's topic and its ancestors'. **Load the module on the core pool too**:
+  the live hub runs there, and without the module on the hub's replica only a grant on the exact unit counts.
+
+| Local route (tenant required, signed in) | What |
+| --- | --- |
+| `GET /local/units` | the tenant's units and its root unit's ancestors (`inTenant: false`), root first |
+| `GET /local/units/{unitId}`, `.../ancestors`, `.../categories` | one unit, its ancestors, its post categories |
+| `GET /local/units/{unitId}/members` | its memberships (`org.read` on the unit or above it) |
 
 ## Building
 
