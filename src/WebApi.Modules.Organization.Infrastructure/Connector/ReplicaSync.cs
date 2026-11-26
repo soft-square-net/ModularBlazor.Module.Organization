@@ -48,9 +48,12 @@ public sealed class ReplicaSync(
     /// <summary>The live message type for changes of a unit's members (the unit events keep their own type).</summary>
     public const string MembersChangedMessage = "org.members-changed";
 
-    public async Task<SyncOutcome> SyncAsync(ReplicaBinding binding, CancellationToken ct)
+    /// <param name="rewriteGrants">Write every unit's grants again, not only the changed units' (the runner asks for it
+    /// once per tenant after the module starts, so a new grant rule of an upgrade reaches the existing tenants).</param>
+    public async Task<SyncOutcome> SyncAsync(ReplicaBinding binding, CancellationToken ct, bool rewriteGrants = false)
     {
         var state = await PrepareAsync(binding, ct);
+        if (rewriteGrants) state.PendingGrantUnits = [Guid.Empty];
         var window = FeedWindow.Deserialize(state.Cursor, state.Applied);
         var take = Math.Clamp(options.Value.FeedPageSize, 1, 1000);
         var after = window.Cursor;

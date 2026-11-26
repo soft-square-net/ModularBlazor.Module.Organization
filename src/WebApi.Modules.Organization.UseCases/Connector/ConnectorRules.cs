@@ -1,5 +1,6 @@
 using System.Text.Json;
 using soft.square.net.WebApi.Contracts.Tenancy;
+using soft.square.net.WebApi.Modules.Organization.Core;
 using PlatformSeed = soft.square.net.WebApi.Contracts.Tenancy.TenantSeed;
 
 namespace soft.square.net.WebApi.Modules.Organization.UseCases.Connector;
@@ -86,19 +87,26 @@ public static class OrgGrants
 
     /// <summary>
     /// The grants of one unit's memberships at <paramref name="now"/>: ended memberships give none, and platform
-    /// permissions (which come from platform roles) are left out, except <c>access.grants.manage</c>.
+    /// permissions (which come from platform roles) are left out, except <c>access.grants.manage</c>. A membership with
+    /// a position also gets <c>org.read</c> (every member reads their org on the central service; here it lets them
+    /// follow the org's live topic), whatever the position's own list says: positions stored before it was a default
+    /// keep their lists, and no migration rewrites them.
     /// </summary>
     public static IReadOnlyList<NewGrant> For(Guid unitId, IEnumerable<GrantingMembership> memberships, DateTimeOffset now)
     {
         var scope = UnitScopes.Of(unitId);
         return memberships
             .Where(m => !string.IsNullOrEmpty(m.Subject) && (m.To is null || m.To > now))
-            .SelectMany(m => m.Permissions
+            .SelectMany(m => WithRead(m.Permissions)
                 .Where(p => !string.IsNullOrWhiteSpace(p) && (!PlatformPermissions.IsPlatform(p) || p == PlatformPermissions.GrantsManage))
                 .Select(p => new NewGrant(m.Subject, p, scope, m.From, m.To)))
             .Distinct()
             .ToList();
     }
+
+    /// <summary><c>org.read</c> first, then the position's own permissions (none: no position, no grants).</summary>
+    private static IEnumerable<string> WithRead(IReadOnlyList<string> permissions) =>
+        permissions.Count == 0 ? [] : permissions.Prepend(OrgPermissions.Read).Distinct(StringComparer.Ordinal);
 }
 
 /// <summary>What the connector adds to a platform seed's <c>Extra</c>: the org and the unit the tenant is for.</summary>

@@ -57,8 +57,9 @@ public class OtherAggregateRules
     public void PositionsNamePermissions()
     {
         var defaults = PositionDefinition.Defaults(_tree.OrgId, Now);
-        defaults.Single(p => p.Key == PositionDefinition.ManagerKey).Permissions.ShouldBe(["org.units.manage", "shifts.manage"]);
+        defaults.Single(p => p.Key == PositionDefinition.ManagerKey).Permissions.ShouldBe(["org.read", "org.units.manage", "shifts.manage"]);
         defaults.Single(p => p.Key == PositionDefinition.UnitAdminKey).Gives("org.members.manage").ShouldBeTrue();
+        defaults.ShouldAllBe(p => p.Gives("org.read"));
 
         Should.Throw<DomainException>(() => PositionDefinition.Create(_tree.OrgId, "x", "X", null, ["Shifts Manage"], Now));
         Should.Throw<DomainException>(() => PositionDefinition.Create(_tree.OrgId, "x", "X", null, ["shifts"], Now));

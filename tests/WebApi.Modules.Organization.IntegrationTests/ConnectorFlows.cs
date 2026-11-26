@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using soft.square.net.Organization.Contracts;
 using soft.square.net.WebApi.Contracts.Messaging;
+using soft.square.net.WebApi.Contracts.Security;
 using soft.square.net.WebApi.Contracts.Tenancy;
 using soft.square.net.WebApi.Data.Messaging;
 using soft.square.net.WebApi.Modules.Organization.Core.PositionAggregate;
@@ -153,7 +154,10 @@ public sealed class ConnectorFlows : IDisposable
         (await scopes.ScopesAsync("unit", UnitPaths.Id(t.Football.Id), Ct)).ShouldBe(UnitScopes.For(t.Football.Path));
         (await scopes.ScopesAsync("unit", UnitPaths.Id(t.Sport.Id), Ct)).ShouldBeEmpty();
         (await scopes.ScopesAsync("post", UnitPaths.Id(t.Football.Id), Ct)).ShouldBeEmpty();
-        (await scopes.ScopesAsync(OrgLiveTopic.Kind, OrgLiveTopic.Key(t.Org.Id), Ct)).ShouldBe([UnitScopes.Of(t.Org.RootUnitId)]);
+        // The org topic: the org root plus the tenant's seed root and its ancestors, so the seed root's members (alice,
+        // whose unit-admin position gives org.read on News) can subscribe; units below the seed root are not among them.
+        (await scopes.ScopesAsync(OrgLiveTopic.Kind, OrgLiveTopic.Key(t.Org.Id), Ct)).ShouldBe(UnitScopes.For(t.News.Path));
+        _replica.Grants.Of(OrgGrants.Source(t.News.Id)).ShouldContain(g => g.UserId == "alice" && g.Permission == "org.read" && g.Scope == UnitScopes.Of(t.News.Id));
         (await scopes.ScopesAsync(OrgLiveTopic.Kind, OrgLiveTopic.Key(Guid.NewGuid()), Ct)).ShouldBeEmpty(); // not this tenant's org
         (await scopes.ScopesAsync(OrgLiveTopic.Kind, "not-an-id", Ct)).ShouldBeEmpty();
 
@@ -237,7 +241,26 @@ public sealed class ConnectorFlows : IDisposable
         updated.IsSuccess.ShouldBeTrue(string.Join("; ", updated.Errors));
         await _replica.SyncAsync(t.Binding, Ct);
 
-        _replica.Grants.Of(OrgGrants.Source(t.Sports.Id)).Select(g => g.Permission).ShouldBe(["shifts.manage", "content.publish"], ignoreOrder: true);
+        _replica.Grants.Of(OrgGrants.Source(t.Sports.Id)).Select(g => g.Permission).ShouldBe(["org.read", "shifts.manage", "content.publish"], ignoreOrder: true);
+    }
+
+    [Fact]
+    public async Task ARewriteSyncRepairsGrantsWrittenByAnEarlierVersion()
+    {
+        var t = await BuildAsync();
+        await _replica.SyncAsync(t.Binding, Ct);
+        // Grants as an earlier version wrote them: the position's permissions only, without org.read.
+        var source = OrgGrants.Source(t.Sports.Id);
+        var stale = _replica.Grants.Of(source).Where(g => g.Permission != "org.read")
+            .Select(g => new NewGrant(g.UserId, g.Permission, g.Scope, g.ValidFrom, g.ValidTo)).ToList();
+        await _replica.Grants.ReplaceSourceAsync(source, stale, Ct);
+
+        (await _replica.SyncAsync(t.Binding, Ct)).Applied.ShouldBe(0);
+        _replica.Grants.Of(source).ShouldNotContain(g => g.Permission == "org.read"); // a plain sync writes nothing
+
+        await _replica.SyncAsync(t.Binding, Ct, rewriteGrants: true);
+        _replica.Grants.Of(source).ShouldContain(g => g.UserId == "bob" && g.Permission == "org.read");
+        _replica.Grants.Of(OrgGrants.Source(t.News.Id)).ShouldContain(g => g.UserId == "alice" && g.Permission == "org.read");
     }
 
     [Fact]

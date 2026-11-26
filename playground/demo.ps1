@@ -11,8 +11,11 @@
     3. creates (or finds) the tenant seed "newsdesk" for deployment "branch", rooted at the department, with the
        manager as its admin, and waits until B's seed reconciler has created the tenant and reported Provisioned;
     4. checks B's replica of the tenant (local API): the department and the Section in the tenant, the org and the
-       sector as ancestors, the Section's categories, and the managers' grants (source org:{unitId});
-    5. renames the Section on the central service and waits until B's replica has it.
+       sector as ancestors, the Section's categories, and the managers' grants (source org:{unitId}), among them
+       org.read on the department (the tenant's seed root), and subscribes to the org's live topic on B's hub
+       (/hubs/live) as the manager, the subscription the org page's Live chip makes;
+    5. renames the Section on the central service, waits until B's replica has it and the live topic has nudged the
+       manager.
 
   Every step is idempotent: run it again to repeat the checks (step 5 renames the Section again each run).
   Exits with 1 when a check fails. Windows PowerShell 5.1 or PowerShell 7.
@@ -142,6 +145,64 @@ function Wait-Until([scriptblock] $probe, [string] $what) {
     throw "Timed out after $TimeoutSeconds s waiting for $what."
 }
 
+# ------------------------------------------------------------------ the live hub (SignalR JSON protocol over a WebSocket)
+
+$RS = [char]0x1e   # the protocol's record separator
+
+function Send-Live($live, [string] $json) {
+    $bytes = [Text.Encoding]::UTF8.GetBytes($json + $RS)
+    $segment = New-Object 'System.ArraySegment[byte]' -ArgumentList (,$bytes)
+    [void] $live.Socket.SendAsync($segment, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, [Threading.CancellationToken]::None).GetAwaiter().GetResult()
+}
+
+# The next record that is not a ping, or $null after $seconds (a timeout aborts the socket).
+function Receive-Live($live, [int] $seconds) {
+    $deadline = (Get-Date).AddSeconds($seconds)
+    while ($true) {
+        $i = $live.Buffer.IndexOf($RS)
+        if ($i -ge 0) {
+            $text = $live.Buffer.Substring(0, $i); $live.Buffer = $live.Buffer.Substring($i + 1)
+            $record = $text | ConvertFrom-Json
+            if ($record.type -ne 6) { return $record } else { continue }
+        }
+        $left = $deadline - (Get-Date)
+        if ($left.TotalMilliseconds -le 0) { return $null }
+        $cts = New-Object Threading.CancellationTokenSource($left)
+        $buffer = New-Object byte[] 16384
+        $segment = New-Object 'System.ArraySegment[byte]' -ArgumentList (,$buffer)
+        try { $r = $live.Socket.ReceiveAsync($segment, $cts.Token).GetAwaiter().GetResult() } catch { return $null }
+        if ($r.MessageType -eq [System.Net.WebSockets.WebSocketMessageType]::Close) { throw "The live hub closed the connection: $($r.CloseStatusDescription)" }
+        $live.Buffer += [Text.Encoding]::UTF8.GetString($buffer, 0, $r.Count)
+    }
+}
+
+function Open-Live([string] $token, [string] $tenant) {
+    $socket = New-Object System.Net.WebSockets.ClientWebSocket
+    $socket.Options.SetRequestHeader('Authorization', "Bearer $token")
+    if ($tenant) { $socket.Options.SetRequestHeader('X-Tenant', $tenant) }
+    [void] $socket.ConnectAsync([Uri](($Gateway -replace '^http', 'ws') + 'hubs/live'), [Threading.CancellationToken]::None).GetAwaiter().GetResult()
+    $live = @{ Socket = $socket; Buffer = ''; Next = 0 }
+    Send-Live $live '{"protocol":"json","version":1}'
+    $handshake = Receive-Live $live 10
+    if ($null -eq $handshake -or $handshake.error) { throw "The live hub refused the handshake: $($handshake.error)" }
+    return $live
+}
+
+# Subscribe(topic) on the hub: the LiveSubscribeResult (ok, error).
+function Subscribe-Live($live, [string] $topic) {
+    $live.Next = $live.Next + 1
+    $id = [string] $live.Next
+    Send-Live $live (@{ type = 1; invocationId = $id; target = 'Subscribe'; arguments = @($topic) } | ConvertTo-Json -Compress)
+    while ($true) {
+        $record = Receive-Live $live 15
+        if ($null -eq $record) { throw "No answer from the live hub to Subscribe($topic)." }
+        if ($record.type -eq 3 -and $record.invocationId -eq $id) {
+            if ($record.error) { throw "Subscribe($topic) failed: $($record.error)" }
+            return $record.result
+        }
+    }
+}
+
 # ------------------------------------------------------------------ 0. the playground is up, the accounts sign in
 
 Step 'Playground'
@@ -250,17 +311,15 @@ Check ($sectionGrants.Count -gt 0) "manager grants on the Section: $(($sectionGr
 Check ($deptGrants.Count -gt 0) "seed admin (unit-admin) grants on the department: $(($deptGrants | ForEach-Object { "$($_.permission)@$($_.scope)" }) -join ', ')"
 Check ($seedGrants.Count -gt 0) "the host's seed admin grant: $(($seedGrants | ForEach-Object { "$($_.permission)@$($_.scope)" }) -join ', ')"
 
-# The org page follows the live topic organization:org:{orgId:N}, which needs org.read on the org's root unit in the
-# subscriber's tenant. No position gives org.read, and a tenant rooted below the org root gets grants on its own units
-# only, so nobody holds it there (README, "Troubleshooting"). The manager, as the seed's admin (access.grants.manage),
-# grants it to the platform admin, so the admin's org page in this tenant refreshes live.
-$adminSub = (Get-Claims $admin).sub
-$rootScope = "unit:$($org.rootUnitId.Replace('-', ''))"
-$adminGrants = @((Send GET ($Gateway + "api/identity/grants?userId=$adminSub") -token $manager -tenant $Tenant).Json)
-if (-not ($adminGrants | Where-Object { $_.permission -eq 'org.read' -and $_.scope -eq $rootScope })) {
-    Send POST ($Gateway + 'api/identity/grants') @{ userId = $adminSub; permission = 'org.read'; scope = $rootScope } -token $manager -tenant $Tenant | Out-Null
-    Ok "granted $AdminEmail org.read on the org root ($rootScope) in tenant $Tenant (for the live org page)"
-} else { Ok "$AdminEmail holds org.read on the org root in tenant $Tenant (for the live org page)" }
+# The org page's Live chip is its subscription to the live topic organization:org:{orgId:N}. On a connector tenant the
+# topic's scopes are the org root plus the tenant's seed root and its ancestors, and every position gives org.read on
+# its unit, so the seed's admin (unit-admin on the department) may subscribe with no hand-made grant.
+$deptScope = "unit:$($department.id.Replace('-', ''))"
+Check (@($deptGrants | Where-Object { $_.permission -eq 'org.read' -and $_.scope -eq $deptScope }).Count -eq 1) "the manager holds org.read on the seed root ($deptScope) from the unit-admin position"
+$orgTopic = "organization:org:$($org.id.Replace('-', ''))"
+$live = Open-Live $manager $Tenant
+$subscribed = Subscribe-Live $live $orgTopic
+Check ([bool] $subscribed.ok) "the manager subscribed to $orgTopic on B's live hub$(if (-not $subscribed.ok) { ": $($subscribed.error)" }) (the org page's Live chip)"
 
 # ------------------------------------------------------------------ 5. an edit on central reaches B
 
@@ -277,9 +336,21 @@ $seen = Wait-Until {
     if ($u.nameEn -eq $newName) { $u }
 } "B's replica to show the new name"
 Ok "B's replica shows '$newName' after $($seen.Seconds) s"
+if ($subscribed.ok) {
+    $nudge = $null
+    while ($null -eq $nudge) {
+        $record = Receive-Live $live 30
+        if ($null -eq $record) { break }
+        if ($record.type -eq 1 -and $record.target -eq 'Message') { $nudge = $record }
+    }
+    Check ($null -ne $nudge) "the live topic nudged the manager ($(if ($nudge) { ($nudge.arguments | ConvertTo-Json -Compress -Depth 5) -replace '^(.{160}).+$', '$1...' } else { 'nothing within 30 s' }))"
+}
+if ($live.Socket.State -eq [System.Net.WebSockets.WebSocketState]::Open) {
+    [void] $live.Socket.CloseAsync([System.Net.WebSockets.WebSocketCloseStatus]::NormalClosure, 'done', [Threading.CancellationToken]::None).GetAwaiter().GetResult()
+}
 
 Write-Host ''
 Write-Host "Org $($org.id) | root $($org.rootUnitId) | sector $($sector.id) | department $($department.id) | Section $($section.id) | seed $($seed.id)"
-Write-Host "Open http://localhost:5070 as $AdminEmail, tenant $Tenant, then Organization > Playground News: run this script again and watch the tree."
+Write-Host "Open http://localhost:5070 as $ManagerEmail (password $ManagerPassword), then Organization > Playground News: the tree shows Live; run this script again and watch it."
 if ($script:failed -gt 0) { Write-Host "$script:failed check(s) failed." -ForegroundColor Red; exit 1 }
 Write-Host 'All checks passed.' -ForegroundColor Green
