@@ -5,9 +5,9 @@ namespace soft.square.net.WebApi.Modules.Organization.Web.Extensions;
 
 /// <summary>
 /// The exceptions that still reach the endpoints, as problem details: a broken domain rule (an aggregate throws
-/// <see cref="DomainException"/>) and a lost race on a concurrency token are 409. Expected outcomes come back as an
-/// Ardalis Result instead (see <see cref="ResultExtensions"/>). On the module's route group, so it is module code and
-/// unloads with the module.
+/// <see cref="DomainException"/>), a lost race on a concurrency token and a write that breaks a unique key are 409.
+/// Expected outcomes come back as an Ardalis Result instead (see <see cref="ResultExtensions"/>). On the module's route
+/// group, so it is module code and unloads with the module.
 /// </summary>
 public sealed class OrganizationProblemsFilter : IEndpointFilter
 {
@@ -15,6 +15,7 @@ public sealed class OrganizationProblemsFilter : IEndpointFilter
     {
         try { return await next(context); }
         catch (DbUpdateConcurrencyException) { return Results.Problem("Someone else changed this first; reload it and try again.", statusCode: StatusCodes.Status409Conflict); }
+        catch (DbUpdateException) { return Results.Problem("The change conflicts with data that already exists (a duplicate key, or a row someone removed).", statusCode: StatusCodes.Status409Conflict); }
         catch (DomainException e) { return Results.Problem(e.Message, statusCode: StatusCodes.Status409Conflict); }
     }
 }

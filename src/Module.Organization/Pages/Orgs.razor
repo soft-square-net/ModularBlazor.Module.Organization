@@ -1,0 +1,49 @@
+@page "/organization"
+@inherits OrganizationPageBase
+
+@*
+  A placeholder until the client module (P1-3): the orgs the caller can see (GET /api/organization/orgs), read from the
+  central Organization service. The tree explorer, unit editor, members, positions, seeds and links pages come in P1-3.
+*@
+
+<PageHeader Title="Organization" />
+
+<div class="mud-container mn-page">
+  <p class="mud-typography mud-typography-body1">
+    The organizations you administer or belong to, from the central Organization service.
+  </p>
+
+  @if (Error is not null)
+  {
+    <p class="mud-typography mud-typography-body2 mn-error" role="alert">@Error</p>
+  }
+
+  @if (_orgs is null)
+  {
+    <p class="mud-typography mud-typography-body2">Loading...</p>
+  }
+  else if (_orgs.Count == 0)
+  {
+    <p class="mud-typography mud-typography-body2">No organizations yet.</p>
+  }
+  else
+  {
+    <div class="mud-paper mud-elevation-2 mn-card">
+      <table class="mud-table">
+        <thead><tr><th>Key</th><th>Name</th><th>Arabic name</th></tr></thead>
+        <tbody>
+          @foreach (var org in _orgs)
+          {
+            <tr><td>@org.Key</td><td>@org.NameEn</td><td dir="rtl">@org.NameAr</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>
+
+@code {
+    private IReadOnlyList<OrgDto>? _orgs;
+
+    protected override Task OnInitializedAsync() => RunAsync(async () => _orgs = await Api.ListOrgsAsync(), toast: false);
+}

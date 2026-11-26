@@ -16,7 +16,10 @@ public abstract class OrganizationPageBase : ComponentBase
     [Inject] protected MudTailRuntime MudTail { get; set; } = default!;
     [Inject] protected NavigationManager Nav { get; set; } = default!;
 
-    /// <summary>The module's routes (/api/organization/...) reach the pool that runs the module through the gateway.</summary>
+    /// <summary>
+    /// The central service's routes (/api/organization/...) through the gateway. P1-3 adds Organization:BaseUrl for a
+    /// central service in another deployment.
+    /// </summary>
     protected OrganizationClient Api => new(HttpClients.CreateClient(HttpClientNames.WebApi));
 
     protected bool Busy { get; private set; }
@@ -56,12 +59,10 @@ public abstract class OrganizationPageBase : ComponentBase
 
     protected static string Describe(Exception ex) => ex switch
     {
-        OrganizationApiException { StatusCode: 400 } api when Mentions(api, "tenant") =>
-            "400: no tenant. Notes belong to a tenant: sign in to one (your organisation) to use them.",
         OrganizationApiException { StatusCode: 401 } => "401: the gateway did not accept the access token. Sign in again.",
         OrganizationApiException { StatusCode: 403 } api =>
-            $"403: {ProblemDetail(api) ?? "your account lacks the permission for this (organization.* in this tenant)."}",
-        OrganizationApiException { StatusCode: 404 } api => $"404: {ProblemDetail(api) ?? "not found."}",
+            $"403: {ProblemDetail(api) ?? "you may not do this in this organization."}",
+        OrganizationApiException { StatusCode: 404 } api => $"404: {ProblemDetail(api) ?? "not found (is the central Organization service running here?)."}",
         OrganizationApiException { StatusCode: 409 } api => $"409: {ProblemDetail(api) ?? "someone changed it meanwhile. Reload and try again."}",
         OrganizationApiException api => $"{api.StatusCode}: {ProblemDetail(api) ?? FirstLine(api.Response) ?? FirstLine(api.Message)}",
         HttpRequestException http => $"The gateway is not reachable ({http.Message}).",
@@ -82,9 +83,6 @@ public abstract class OrganizationPageBase : ComponentBase
         catch (System.Text.Json.JsonException) { }
         return null;
     }
-
-    private static bool Mentions(OrganizationApiException api, string word) =>
-        (api.Response ?? "").Contains(word, StringComparison.OrdinalIgnoreCase);
 
     private static string? FirstLine(string? text)
         => string.IsNullOrWhiteSpace(text) ? null : text.Split('\n', 2)[0].Trim();

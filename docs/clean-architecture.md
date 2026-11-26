@@ -1,5 +1,8 @@
 # Clean Architecture in this module
 
+> This is the template's guide. Its `Note` example was removed when the organization model replaced it (see the
+> README); the layers, rules and the steps for adding a feature are the same.
+
 This module follows [Ardalis Clean Architecture](https://github.com/ardalis/CleanArchitecture), adapted to what a
 ModularBlazor runtime module is: an assembly set that the host loads into a collectible load context, maps under
 `/api/organization`, and can unload again. The layout comes from the platform's Content module.

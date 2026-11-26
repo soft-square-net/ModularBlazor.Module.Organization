@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Organization.Contracts: the public contract of the Organization service, shipped as the NuGet package
+    soft.square.net.Organization.Contracts.
+    - DTOs of the central management API and of its feed.
+    - The org.* integration event records (v1), with their type names (OrgEvents).
+    - IOrganizationClient, the typed client contract (implemented by Organization.Client in P1-3).
+    - UnitScopes / UnitPaths: a unit path to the grant scopes unit:{id} of the unit and every ancestor.
+    Plain data and the BCL only (no platform package), so any module, client or service can reference it. A module
+    copies it into its own output (a private dependency): no type of it is shared across load contexts.
+  -->
+
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>$(SoftSquarePrefix).Organization.Contracts</PackageId>
+    <Description>Contracts of the ModularBlazor Organization service: DTOs, org.* integration events (v1), IOrganizationClient and unit scopes.</Description>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+</Project>

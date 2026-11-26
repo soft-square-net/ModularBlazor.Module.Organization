@@ -11,5 +11,5 @@ namespace soft.square.net.WebApi.Modules.Organization.Infrastructure.Data;
 internal sealed class OrganizationDesignTimeFactory : IDesignTimeDbContextFactory<OrganizationDbContext>
 {
     public OrganizationDbContext CreateDbContext(string[] args) =>
-        new(TenantDbDesignTime.Options<OrganizationDbContext>(args), TenantDbDesignTime.Tenant);
+        new(TenantDbDesignTime.Options<OrganizationDbContext>(args), new CentralDatabase("design-time", "design_time"));
 }
