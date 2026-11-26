@@ -1,0 +1,41 @@
+@inject IStringLocalizerFactory Texts
+
+@*
+  An in-page dialog in MudTail's dialog shell (mud-dialog-container / mud-dialog): title bar with a close button, the
+  body, and the actions row. Escape and the overlay close it (OnClose).
+*@
+
+@if (Open)
+{
+  <div class="mud-dialog-container open og-modal" @onkeydown="OnKey">
+    <div class="mud-dialog-overlay" @onclick="CloseAsync"></div>
+    <div class="mud-dialog" style="max-width:@MaxWidth" role="dialog" aria-modal="true" aria-labelledby="@_titleId" tabindex="-1">
+      <div class="mud-dialog-title">
+        <span id="@_titleId">@Title</span>
+        <button type="button" class="mud-tree__btn" aria-label="@L["Close"]" @onclick="CloseAsync">✕</button>
+      </div>
+      <div class="mud-dialog-content">@ChildContent</div>
+      @if (Actions is not null)
+      {
+        <div class="mud-dialog-actions">@Actions</div>
+      }
+    </div>
+  </div>
+}
+
+@code {
+  [Parameter] public bool Open { get; set; }
+  [Parameter] public string Title { get; set; } = "";
+  [Parameter] public string MaxWidth { get; set; } = "560px";
+  [Parameter] public RenderFragment? ChildContent { get; set; }
+  [Parameter] public RenderFragment? Actions { get; set; }
+  [Parameter] public EventCallback OnClose { get; set; }
+
+  private readonly string _titleId = "og-dlg-" + Guid.NewGuid().ToString("n");
+  private IStringLocalizer? _l;
+  private IStringLocalizer L => _l ??= Texts.Create(typeof(OrganizationPageBase));
+
+  private Task CloseAsync() => OnClose.InvokeAsync();
+
+  private Task OnKey(KeyboardEventArgs e) => e.Key == "Escape" ? CloseAsync() : Task.CompletedTask;
+}

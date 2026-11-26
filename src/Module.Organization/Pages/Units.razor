@@ -1,0 +1,555 @@
+@page "/organization/units"
+@inherits OrgPageBase
+@using soft.square.net.ModularBlazor.Abstractions.Live
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IServiceProvider Services
+
+@*
+  The org's unit tree (GET .../units, .../unit-types) as an explorer: expand, select, drag a unit onto another to move
+  it with its subtree (POST .../units/{id}/move; "Move to…" does the same from the keyboard). The selected unit's
+  editor: names, tags, time zone and, for a Section, its post categories from Content (at least one). Add a child of an
+  allowed type, remove a leaf. The tree reloads when another admin changes the org (live topic organization:org:{id},
+  when the deployment publishes it) and on Refresh.
+*@
+
+<PageHeader Title="@L["Units"]" />
+
+<div class="mud-container og-page">
+  <OrgBar Orgs="Orgs" Org="Org" Current="units" />
+
+  @if (Error is not null)
+  {
+    <p class="mud-typography mud-typography-body2 og-error" role="alert">@Error</p>
+  }
+
+  @if (Org is null)
+  {
+    <p class="mud-typography mud-typography-body2 og-muted">@(Orgs is null ? L["Loading…"] : L["Choose an organization."])</p>
+  }
+  else if (_tree is null)
+  {
+    <p class="mud-typography mud-typography-body2 og-muted">@L["Loading…"]</p>
+  }
+  else
+  {
+    <div class="og-explorer">
+      <section class="mud-paper mud-elevation-1 og-card og-explorer__tree" aria-label="@L["Unit tree"]">
+        <header class="og-card__head">
+          <h2 class="mud-typography mud-typography-h6">@L["Unit tree"]</h2>
+          <div class="og-actions">
+            @if (_live)
+            {
+              <Chip Tone="success" Hint="@L["Changes by other admins show here as they happen."]">@L["Live"]</Chip>
+            }
+            <button type="button" class="mud-button-root mud-button-text mud-button-primary mud-button-small" @onclick="ReloadAsync" disabled="@Busy">@L["Refresh"]</button>
+            <button type="button" class="mud-button-root mud-button-text mud-button-surface mud-button-small" @onclick="ExpandAll">@L["Expand all"]</button>
+          </div>
+        </header>
+        <p class="mud-input-helper-text">@L["Drag a unit onto another to move it there with everything below it."]</p>
+        <ul class="mud-tree mud-tree--lines mud-tree__root @(_dragId is not null ? "is-dragging" : "") @(_dragInvalid ? "is-drop-invalid" : "")" role="tree" aria-label="@Name(Org.NameEn, Org.NameAr)"
+            tabindex="0" aria-activedescendant="@(_selectedId is { } active ? ItemId(active) : null)" @onkeydown="OnTreeKey">
+          @foreach (var root in _tree.Roots)
+          {
+            @RenderNode(root)
+          }
+        </ul>
+      </section>
+
+      <section class="mud-paper mud-elevation-1 og-card og-explorer__editor" aria-live="polite">
+        @if (_form is not null)
+        {
+          @RenderEditor(_form)
+        }
+        else if (Selected is { } unit)
+        {
+          @RenderDetails(unit)
+        }
+        else
+        {
+          <p class="mud-typography mud-typography-body2 og-muted">@L["Select a unit to see and edit it."]</p>
+        }
+      </section>
+    </div>
+  }
+</div>
+
+<Modal Open="_move is not null" Title="@L["Move {0}", _move is { } mv ? UnitName(mv.UnitId) : ""]" OnClose="() => _move = null">
+  <ChildContent>
+    @if (_move is { } move && _tree is not null)
+    {
+      <div class="mud-input-control">
+        <label class="mud-input-label" for="og-move-to">@L["New parent"]</label>
+        <div class="mud-input-wrapper mud-input-wrapper--select">
+          <select id="og-move-to" class="mud-input-slot" @bind="move.TargetId">
+            <option value="">@L["Choose…"]</option>
+            @foreach (var target in _tree.MoveTargets(move.UnitId))
+            {
+              <option value="@target.Unit.Id">@(new string(' ', target.Level * 2))@UnitName(target.Unit.Id) · @TypeName(target.Unit.TypeKey)</option>
+            }
+          </select>
+        </div>
+        <div class="mud-input-helper-text">@L["Only the units it may go under are listed. Its subtree moves with it, and paths and rights below it follow."]</div>
+      </div>
+    }
+  </ChildContent>
+  <Actions>
+    <button type="button" class="mud-button-root mud-button-text mud-button-surface mud-button-medium" @onclick="() => _move = null">@L["Cancel"]</button>
+    <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-medium" @onclick="MoveAsync" disabled="@(Busy || _move?.TargetId is null)">@L["Move"]</button>
+  </Actions>
+</Modal>
+
+<Modal Open="_removing is not null" Title="@L["Remove {0}?", _removing is { } r ? UnitName(r.Id) : ""]" OnClose="() => _removing = null">
+  <ChildContent>
+    <p class="mud-typography mud-typography-body2">@L["The unit is removed for good. Only a unit with no children, no members and no tenant can be removed."]</p>
+  </ChildContent>
+  <Actions>
+    <button type="button" class="mud-button-root mud-button-text mud-button-surface mud-button-medium" @onclick="() => _removing = null">@L["Keep it"]</button>
+    <button type="button" class="mud-button-root mud-button-filled mud-button-error mud-button-medium" @onclick="RemoveAsync" disabled="@Busy">@L["Remove"]</button>
+  </Actions>
+</Modal>
+
+@code {
+  private sealed class MoveForm
+  {
+    public Guid UnitId { get; init; }
+    public Guid? TargetId { get; set; }
+  }
+
+  protected override string PageKey => "units";
+
+  private IReadOnlyList<OrgUnitDto> _units = [];
+  private IReadOnlyList<UnitTypeDto> _types = [];
+  private UnitTree? _tree;
+  private readonly HashSet<Guid> _expanded = [];
+  private Guid? _selectedId;
+  private UnitTenantDto? _tenant;
+  private UnitForm? _form;
+  private bool _showProblems;
+  private IReadOnlyList<string> _problems = [];
+  private MoveForm? _move;
+  private OrgUnitDto? _removing;
+  private Guid? _dragId;
+  private Guid? _dropId;
+  private bool _dragInvalid;
+  private IAsyncDisposable? _subscription;
+  private Guid? _subscribedOrg;
+  private bool _live;
+
+  private OrgUnitDto? Selected => _selectedId is { } id ? _tree?.Find(id)?.Unit : null;
+
+  private bool CanManage(OrgUnitDto unit) => Rights.Can(OrgPermissionNames.UnitsManage, unit.Path);
+
+  protected override async Task OnAfterRenderAsync(bool firstRender)
+  {
+    // The tree's styles are one of MudTail's packs, added on first use: this page renders the tree's markup itself.
+    if (!firstRender || await MudTail.GetAsync() is not { } runtime) return;
+    try { await runtime.InvokeVoidAsync("load", "tree"); }
+    catch (JSException) { /* offline: the tree still works, unstyled */ }
+  }
+
+  protected override async Task LoadOrgAsync(OrgDto org)
+  {
+    _selectedId = null;
+    _form = null;
+    _expanded.Clear();
+    await ReloadAsync();
+    if (_tree is not null)
+      foreach (var root in _tree.Roots)
+      {
+        _expanded.Add(root.Unit.Id);
+        foreach (var child in root.Children) _expanded.Add(child.Unit.Id);
+      }
+    await SubscribeAsync(org.Id);
+  }
+
+  private async Task ReloadAsync()
+  {
+    if (Org is not { } org) return;
+    await RunAsync(async () =>
+    {
+      var units = Api.ListUnitsAsync(org.Id);
+      var types = Api.ListUnitTypesAsync(org.Id);
+      _units = await units;
+      _types = await types;
+      _tree = UnitTree.Build(_units, _types);
+      if (_selectedId is { } id && _tree.Find(id) is null) { _selectedId = null; _form = null; }
+    }, toast: false);
+    await LoadRightsAsync(org, _units);
+  }
+
+  // ───────── live: another admin's change reloads the tree ─────────
+
+  private async Task SubscribeAsync(Guid orgId)
+  {
+    if (_subscribedOrg == orgId) return;
+    await UnsubscribeAsync();
+    if (Services.GetService(typeof(ILiveChannel)) is not ILiveChannel live) return;
+    try
+    {
+      _subscription = await live.SubscribeAsync(OrgLive.Topic(orgId), OnLiveAsync, options: new LiveSubscribeOptions
+      {
+        OnResync = _ => InvokeAsync(ReloadAsync),
+        OnRevoked = _ => InvokeAsync(() => { _live = false; StateHasChanged(); }),
+      });
+      _subscribedOrg = orgId;
+      _live = live.State == LiveState.Connected;
+    }
+    catch (Exception e) when (e is LiveSubscriptionException or InvalidOperationException or HttpRequestException)
+    {
+      _live = false; // the deployment does not publish org changes (yet): Refresh still works
+    }
+  }
+
+  private Task OnLiveAsync(LiveMessage message) => InvokeAsync(async () =>
+  {
+    _live = true;
+    if (_form is null) await ReloadAsync(); // never under an open editor: Refresh after saving shows the change
+    else await MudTail.ToastAsync(L["Another admin changed this organization. Refresh after saving."], "info");
+  });
+
+  private async Task UnsubscribeAsync()
+  {
+    if (_subscription is not null)
+    {
+      try { await _subscription.DisposeAsync(); } catch (Exception) { /* the channel may be gone */ }
+    }
+    _subscription = null;
+    _subscribedOrg = null;
+  }
+
+  public async ValueTask DisposeAsync()
+  {
+    await UnsubscribeAsync();
+    Dispose();
+  }
+
+  // ───────── tree ─────────
+
+  private RenderFragment RenderNode(UnitNode node) => __builder =>
+  {
+    var unit = node.Unit;
+    var expanded = _expanded.Contains(unit.Id);
+    var selected = _selectedId == unit.Id;
+    var dropping = _dropId == unit.Id;
+    <li class="mud-tree__item @(selected ? "is-selected" : "") @(_dragId == unit.Id ? "is-dragging" : "")" role="treeitem"
+        aria-level="@(node.Level + 1)" aria-selected="@(selected ? "true" : "false")" aria-expanded="@(node.HasChildren ? (expanded ? "true" : "false") : null)"
+        id="@ItemId(unit.Id)" @key="unit.Id"
+        @ondragstart="() => DragStart(unit.Id)" @ondragstart:stopPropagation="true">
+      @* The inline handler gives the drag its data: without it Firefox does not start dragging. *@
+      <div class="mud-tree__row @(dropping ? (_dragInvalid ? "" : "is-drop-inside") : "")" style="--mud-tree-level:@node.Level"
+           draggable="@(unit.ParentId is not null && CanManage(unit) ? "true" : "false")"
+           ondragstart="event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',this.closest('li').id)"
+           @onclick="() => Select(unit.Id)" @ondragend="DragEnd"
+           @ondragenter="() => DragOver(unit.Id)" @ondragover="() => DragOver(unit.Id)" @ondragover:preventDefault="true"
+           @ondrop="() => DropAsync(unit.Id)" @ondrop:preventDefault="true">
+        <span class="mud-tree__grip @(unit.ParentId is null ? "is-empty" : "")" aria-hidden="true">⋮⋮</span>
+        <span class="mud-tree__toggle @(node.HasChildren ? "" : "is-leaf")" aria-hidden="true"
+              @onclick="() => Toggle(unit.Id)" @onclick:stopPropagation="true">@(node.HasChildren ? "›" : "")</span>
+        <span class="mud-tree__label">@Name(unit.NameEn, unit.NameAr)</span>
+        <span class="mud-tree__badge" title="@L["Type"]">@TypeName(unit.TypeKey)</span>
+        @if (unit.TenantBinding.Kind == TenantBindingKind.OwnTenant)
+        {
+          <span class="mud-tree__badge og-badge--tenant" title="@L["Owns a tenant"]">@L["Tenant"]</span>
+        }
+        @if (unit.Categories.Count > 0)
+        {
+          <span class="mud-tree__badge" title="@L["Post categories"]">@unit.Categories.Count</span>
+        }
+      </div>
+      @if (node.HasChildren)
+      {
+        <ul class="mud-tree__group" role="group" hidden="@(!expanded)">
+          @foreach (var child in node.Children)
+          {
+            @RenderNode(child)
+          }
+        </ul>
+      }
+    </li>
+  };
+
+  private void Toggle(Guid id)
+  {
+    if (!_expanded.Remove(id)) _expanded.Add(id);
+  }
+
+  private void ExpandAll()
+  {
+    if (_tree is null) return;
+    foreach (var node in _tree.All()) if (node.HasChildren) _expanded.Add(node.Unit.Id);
+  }
+
+  private async Task Select(Guid id)
+  {
+    if (_form is not null && _form.Id != id) _form = null;
+    _selectedId = id;
+    _tenant = null;
+    if (Org is { } org)
+    {
+      try { _tenant = await Api.GetUnitTenantAsync(org.Id, id); }
+      catch (OrganizationApiException) { _tenant = null; }
+    }
+  }
+
+  private static string ItemId(Guid id) => $"og-unit-{id:N}";
+
+  /// <summary>Arrows move and open, Enter edits: the tree works without a mouse (focus stays on the tree).</summary>
+  private async Task OnTreeKey(KeyboardEventArgs e)
+  {
+    if (_tree is null) return;
+    var node = Selected is { } current ? _tree.Find(current.Id)! : _tree.Roots.FirstOrDefault();
+    if (node is null) return;
+    if (_selectedId is null && e.Key is "ArrowDown" or "ArrowUp" or "Enter") { await Select(node.Unit.Id); return; }
+    var visible = Visible().ToList();
+    var index = visible.FindIndex(n => n.Unit.Id == node.Unit.Id);
+    var forward = IsRtl ? "ArrowLeft" : "ArrowRight";
+    var back = IsRtl ? "ArrowRight" : "ArrowLeft";
+    switch (e.Key)
+    {
+      case "ArrowDown" when index < visible.Count - 1: await Select(visible[index + 1].Unit.Id); break;
+      case "ArrowUp" when index > 0: await Select(visible[index - 1].Unit.Id); break;
+      case var k when k == forward && node.HasChildren: _expanded.Add(node.Unit.Id); break;
+      case var k when k == back && _expanded.Contains(node.Unit.Id): _expanded.Remove(node.Unit.Id); break;
+      case var k when k == back && node.Unit.ParentId is { } parent: await Select(parent); break;
+      case "Enter": await Select(node.Unit.Id); if (CanManage(node.Unit)) OpenEdit(node.Unit); break;
+    }
+  }
+
+  private IEnumerable<UnitNode> Visible()
+  {
+    IEnumerable<UnitNode> Walk(IEnumerable<UnitNode> nodes)
+    {
+      foreach (var n in nodes)
+      {
+        yield return n;
+        if (_expanded.Contains(n.Unit.Id)) foreach (var c in Walk(n.Children)) yield return c;
+      }
+    }
+    return _tree is null ? [] : Walk(_tree.Roots);
+  }
+
+  // ───────── drag & drop: move ─────────
+
+  private void DragStart(Guid id)
+  {
+    _dragId = id;
+    _dropId = null;
+  }
+
+  private void DragOver(Guid targetId)
+  {
+    if (_dragId is not { } dragged || _tree is null || _dropId == targetId) return;
+    _dropId = targetId;
+    _dragInvalid = dragged == targetId || _tree.WhyNotMove(dragged, targetId) is not null;
+  }
+
+  private void DragEnd()
+  {
+    _dragId = null;
+    _dropId = null;
+    _dragInvalid = false;
+  }
+
+  private async Task DropAsync(Guid targetId)
+  {
+    var dragged = _dragId;
+    DragEnd();
+    if (dragged is not { } id || _tree is null || id == targetId) return;
+    if (_tree.WhyNotMove(id, targetId) is { } why)
+    {
+      await MudTail.ToastAsync(L[why], "warning");
+      return;
+    }
+    _move = new MoveForm { UnitId = id, TargetId = targetId };
+  }
+
+  private async Task MoveAsync()
+  {
+    if (_move is not { TargetId: { } target } move || Org is not { } org || _tree?.Find(move.UnitId) is not { } node) return;
+    await RunAsync(async () =>
+    {
+      var moved = await Api.MoveUnitAsync(org.Id, move.UnitId, new MoveUnitRequest { Version = node.Unit.Version, NewParentId = target });
+      await MudTail.ToastAsync(L["{0} moved.", Name(moved.NameEn, moved.NameAr)], "success");
+      _move = null;
+      _expanded.Add(target);
+      _selectedId = moved.Id;
+    }, ReloadAsync);
+  }
+
+  // ───────── details and editor ─────────
+
+  private RenderFragment RenderDetails(OrgUnitDto unit) => __builder =>
+  {
+    var type = _tree?.TypeOf(unit);
+    var canManage = CanManage(unit);
+    <header class="og-card__head">
+      <h2 class="mud-typography mud-typography-h6">@Name(unit.NameEn, unit.NameAr)</h2>
+      <Chip Tone="info">@TypeName(unit.TypeKey)</Chip>
+    </header>
+    <nav class="og-breadcrumbs mud-typography-body2" aria-label="@L["Path"]">
+      @foreach (var step in _tree!.Ancestry(unit.Id))
+      {
+        <button type="button" class="mud-button-root mud-button-text mud-button-primary mud-button-small" @onclick="() => Select(step.Id)">@Name(step.NameEn, step.NameAr)</button>
+        @if (step.Id != unit.Id)
+        {
+          <span class="og-muted" aria-hidden="true">@(IsRtl ? "‹" : "›")</span>
+        }
+      }
+    </nav>
+    <dl class="og-dl mud-typography-body2">
+      <dt>@L["English name"]</dt><dd dir="ltr" lang="en">@unit.NameEn</dd>
+      <dt>@L["Arabic name"]</dt><dd dir="rtl" lang="ar">@unit.NameAr</dd>
+      <dt>@L["Tags"]</dt><dd>@(unit.Tags.Count == 0 ? "—" : Lists.Join(unit.Tags))</dd>
+      <dt>@L["Time zone"]</dt><dd dir="ltr">@(unit.TimeZone ?? L["the organization's"])</dd>
+      @if (type?.HoldsCategories == true)
+      {
+        <dt>@L["Post categories"]</dt><dd dir="ltr">@Lists.Join(unit.Categories)</dd>
+      }
+      <dt>@L["Tenant"]</dt>
+      <dd>
+        @if (unit.TenantBinding.Kind == TenantBindingKind.OwnTenant)
+        {
+          <span>@L["Owns a tenant (seed {0})", unit.TenantBinding.SeedId ?? ""]</span>
+        }
+        else if (_tenant is { SeedId: not null } t)
+        {
+          <span>@L["Lives in the tenant of {0} ({1})", t.OwnerUnitId is { } owner ? UnitName(owner) : "", t.TenantId ?? t.SeedId]</span>
+        }
+        else
+        {
+          <span class="og-muted">@L["No tenant on its path yet"]</span>
+        }
+      </dd>
+      <dt>@L["Changed"]</dt><dd>@When(unit.UpdatedAt) · @L["version {0}", unit.Version]</dd>
+    </dl>
+    @if (canManage)
+    {
+      <div class="og-row-actions">
+        <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-medium" @onclick="() => OpenEdit(unit)" disabled="@Busy">@L["Edit"]</button>
+        @if (_tree.ChildTypes(unit) is { Count: > 0 } childTypes)
+        {
+          @foreach (var childType in childTypes)
+          {
+            <button type="button" class="mud-button-root mud-button-outlined mud-button-primary mud-button-medium" @onclick="() => OpenNew(unit, childType.Key)" disabled="@Busy">
+              @L["Add {0}", Name(childType.NameEn, childType.NameAr)]
+            </button>
+          }
+        }
+        @if (unit.ParentId is not null)
+        {
+          <button type="button" class="mud-button-root mud-button-text mud-button-primary mud-button-medium" @onclick="() => _move = new MoveForm { UnitId = unit.Id }" disabled="@Busy">@L["Move to…"]</button>
+        }
+        @if (_tree.CanRemove(unit.Id))
+        {
+          <button type="button" class="mud-button-root mud-button-text mud-button-error mud-button-medium" @onclick="() => _removing = unit" disabled="@Busy">@L["Remove"]</button>
+        }
+      </div>
+    }
+    else
+    {
+      <p class="mud-input-helper-text">@L["You may read this unit. Changing it needs org.units.manage on it or above it."]</p>
+    }
+    <div class="og-row-actions">
+      <a class="mud-button-root mud-button-text mud-button-primary mud-button-small" href="@($"{Href("people")}&unit={unit.Id}")">@L["Members of this unit"]</a>
+    </div>
+  };
+
+  private RenderFragment RenderEditor(UnitForm form) => __builder =>
+  {
+    var type = _tree?.Type(form.TypeKey);
+    <header class="og-card__head">
+      <h2 class="mud-typography mud-typography-h6">
+        @(form.IsNew ? L["New {0} under {1}", type is null ? form.TypeKey : Name(type.NameEn, type.NameAr), form.ParentId is { } p ? UnitName(p) : ""] : L["Edit {0}", UnitName(form.Id!.Value)])
+      </h2>
+    </header>
+    <div class="og-grid">
+      <div class="mud-input-control">
+        <label class="mud-input-label" for="og-unit-en">@L["English name"]<span class="mud-required"> *</span></label>
+        <div class="mud-input-wrapper"><input id="og-unit-en" class="mud-input-slot" dir="ltr" lang="en" @bind="form.NameEn" maxlength="200" /></div>
+      </div>
+      <div class="mud-input-control">
+        <label class="mud-input-label" for="og-unit-ar">@L["Arabic name"]<span class="mud-required"> *</span></label>
+        <div class="mud-input-wrapper"><input id="og-unit-ar" class="mud-input-slot" dir="rtl" lang="ar" @bind="form.NameAr" maxlength="200" /></div>
+      </div>
+      <div class="mud-input-control">
+        <label class="mud-input-label" for="og-unit-tags">@L["Tags"]</label>
+        <div class="mud-input-wrapper"><input id="og-unit-tags" class="mud-input-slot" @bind="form.Tags" placeholder="@L["sports, local"]" /></div>
+        <div class="mud-input-helper-text">@L["Separated by commas."]</div>
+      </div>
+      <div class="mud-input-control">
+        <label class="mud-input-label" for="og-unit-tz">@L["Time zone"]</label>
+        <div class="mud-input-wrapper"><input id="og-unit-tz" class="mud-input-slot" dir="ltr" list="og-time-zones" @bind="form.TimeZone" placeholder="Africa/Cairo" /></div>
+        <datalist id="og-time-zones">
+          @foreach (var zone in TimeZones) { <option value="@zone"></option> }
+        </datalist>
+        <div class="mud-input-helper-text">@L["An IANA time zone. Empty: the organization's."]</div>
+      </div>
+    </div>
+    @if (type?.HoldsCategories == true)
+    {
+      <CategoryPicker Selected="form.Categories" SelectedChanged="c => form.Categories = c" ShowRequired="_showProblems" />
+    }
+    @if (_showProblems && _problems.Count > 0)
+    {
+      <ul class="og-problems" role="alert">
+        @foreach (var problem in _problems) { <li class="mud-input-helper-text mud-input-error">@L[problem]</li> }
+      </ul>
+    }
+    <div class="og-row-actions">
+      <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-medium" @onclick="SaveAsync" disabled="@Busy">@(form.IsNew ? L["Add unit"] : L["Save"])</button>
+      <button type="button" class="mud-button-root mud-button-text mud-button-surface mud-button-medium" @onclick="() => _form = null">@L["Cancel"]</button>
+    </div>
+  };
+
+  private static readonly string[] TimeZones =
+    ["Africa/Cairo", "Asia/Riyadh", "Asia/Dubai", "Asia/Kuwait", "Asia/Qatar", "Asia/Amman", "Asia/Beirut", "Africa/Casablanca", "Europe/London", "UTC"];
+
+  private void OpenEdit(OrgUnitDto unit)
+  {
+    _selectedId = unit.Id;
+    _showProblems = false;
+    _form = UnitForm.Edit(unit);
+  }
+
+  private void OpenNew(OrgUnitDto parent, string typeKey)
+  {
+    _showProblems = false;
+    _form = UnitForm.New(parent, typeKey);
+  }
+
+  private async Task SaveAsync()
+  {
+    if (_form is not { } form || Org is not { } org) return;
+    var type = _tree?.Type(form.TypeKey);
+    _problems = form.Validate(type);
+    _showProblems = true;
+    if (_problems.Count > 0) return;
+    await RunAsync(async () =>
+    {
+      var saved = form.Id is { } id
+        ? await Api.UpdateUnitAsync(org.Id, id, form.ToUpdate(type))
+        : await Api.CreateUnitAsync(org.Id, form.ToCreate(type));
+      await MudTail.ToastAsync(L["{0} saved.", Name(saved.NameEn, saved.NameAr)], "success");
+      if (saved.ParentId is { } parent) _expanded.Add(parent);
+      _selectedId = saved.Id;
+      _form = null;
+    }, ReloadAsync);
+  }
+
+  private async Task RemoveAsync()
+  {
+    if (_removing is not { } unit || Org is not { } org) return;
+    await RunAsync(async () =>
+    {
+      await Api.RemoveUnitAsync(org.Id, unit.Id);
+      await MudTail.ToastAsync(L["{0} removed.", Name(unit.NameEn, unit.NameAr)], "success");
+      _removing = null;
+      _selectedId = unit.ParentId;
+    }, ReloadAsync);
+  }
+
+  private string UnitName(Guid id) => _tree?.Find(id)?.Unit is { } u ? Name(u.NameEn, u.NameAr) : id.ToString("N")[..8];
+
+  private string TypeName(string key) => _tree?.Type(key) is { } t ? Name(t.NameEn, t.NameAr) : key;
+}

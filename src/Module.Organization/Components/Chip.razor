@@ -1,0 +1,10 @@
+@*
+  A small status chip; Tone is "success", "warning", "error" or "info" (theme palette colours).
+*@
+<span class="og-chip og-chip--@Tone" title="@Hint">@ChildContent</span>
+
+@code {
+  [Parameter] public string Tone { get; set; } = "info";
+  [Parameter] public string? Hint { get; set; }
+  [Parameter] public RenderFragment? ChildContent { get; set; }
+}

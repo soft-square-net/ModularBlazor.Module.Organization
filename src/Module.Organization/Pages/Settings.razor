@@ -1,0 +1,194 @@
+@page "/organization/settings"
+@inherits OrgPageBase
+
+@*
+  Where the central Organization service is (the Blazor host's setting Organization:BaseUrl; empty: the gateway's
+  /api/organization), with a connection check, and the org's unit types (GET/POST .../unit-types): which type may sit
+  under which, and which types hold post categories (Section).
+*@
+
+<PageHeader Title="@L["Organization settings"]" />
+
+<div class="mud-container og-page">
+  <OrgBar Orgs="Orgs" Org="Org" Current="settings" />
+
+  @if (Error is not null)
+  {
+    <p class="mud-typography mud-typography-body2 og-error" role="alert">@Error</p>
+  }
+
+  <section class="mud-paper mud-elevation-1 og-card">
+    <h2 class="mud-typography mud-typography-h6">@L["Central service"]</h2>
+    <dl class="og-dl mud-typography-body2">
+      <dt>@L["Setting"]</dt><dd dir="ltr"><code>@OrganizationEndpoint.SettingKey</code></dd>
+      <dt>@L["In use"]</dt>
+      <dd>
+        @if (Endpoint.UsesGateway)
+        {
+          <span>@L["This deployment's gateway"]</span> <code dir="ltr">/api/organization</code>
+        }
+        else
+        {
+          <code dir="ltr">@Endpoint.BaseAddress</code>
+        }
+      </dd>
+    </dl>
+    @if (Endpoint.Problem is not null)
+    {
+      <p class="mud-input-helper-text mud-input-error" role="alert">@Endpoint.Problem</p>
+    }
+    <p class="mud-typography mud-typography-body2 og-muted">
+      @L["When the central service runs in another deployment, set Organization:BaseUrl in the Blazor host's wwwroot/appsettings.json to its absolute URL. That service must trust this identity service and allow this site's origin."]
+    </p>
+    <div class="og-row-actions">
+      <button type="button" class="mud-button-root mud-button-outlined mud-button-primary mud-button-medium" @onclick="CheckAsync" disabled="@Busy">@L["Check the connection"]</button>
+      @if (_check is not null)
+      {
+        <Chip Tone="@(_checkOk ? "success" : "error")">@_check</Chip>
+      }
+    </div>
+  </section>
+
+  @if (Org is not null)
+  {
+    <section class="mud-paper mud-elevation-1 og-card">
+      <header class="og-card__head">
+        <h2 class="mud-typography mud-typography-h6">@L["Unit types of {0}", Name(Org.NameEn, Org.NameAr)]</h2>
+        @if (Rights.Administers)
+        {
+          <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-small" @onclick="() => _type = new TypeForm()" disabled="@Busy">@L["New unit type"]</button>
+        }
+      </header>
+      <div class="og-table-wrap">
+        <table class="og-table">
+          <thead><tr><th>@L["Key"]</th><th>@L["Name"]</th><th>@L["Goes under"]</th><th>@L["Holds post categories"]</th><th>@L["Order"]</th></tr></thead>
+          <tbody>
+            @foreach (var t in _types)
+            {
+              <tr @key="t.Id">
+                <td dir="ltr">@t.Key</td>
+                <td>@Name(t.NameEn, t.NameAr)</td>
+                <td>@(t.AllowedParents.Count == 0 ? L["(root)"] : string.Join(", ", t.AllowedParents.Select(TypeName)))</td>
+                <td>@(t.HoldsCategories ? L["Yes, at least one"] : L["No"])</td>
+                <td>@t.Order</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+</div>
+
+<Modal Open="_type is not null" Title="@L["New unit type"]" OnClose="() => _type = null">
+  <ChildContent>
+    @if (_type is { } f)
+    {
+      <div class="og-grid">
+        <div class="mud-input-control">
+          <label class="mud-input-label" for="og-t-key">@L["Key"]<span class="mud-required"> *</span></label>
+          <div class="mud-input-wrapper"><input id="og-t-key" class="mud-input-slot" dir="ltr" @bind="f.Key" placeholder="desk" /></div>
+        </div>
+        <div class="mud-input-control">
+          <label class="mud-input-label" for="og-t-en">@L["English name"]<span class="mud-required"> *</span></label>
+          <div class="mud-input-wrapper"><input id="og-t-en" class="mud-input-slot" dir="ltr" lang="en" @bind="f.NameEn" /></div>
+        </div>
+        <div class="mud-input-control">
+          <label class="mud-input-label" for="og-t-ar">@L["Arabic name"]<span class="mud-required"> *</span></label>
+          <div class="mud-input-wrapper"><input id="og-t-ar" class="mud-input-slot" dir="rtl" lang="ar" @bind="f.NameAr" /></div>
+        </div>
+        <div class="mud-input-control">
+          <label class="mud-input-label" for="og-t-order">@L["Order"]</label>
+          <div class="mud-input-wrapper"><input id="og-t-order" type="number" class="mud-input-slot" @bind="f.Order" /></div>
+        </div>
+      </div>
+      <fieldset class="og-fieldset">
+        <legend class="mud-input-label">@L["Goes under"]</legend>
+        <div class="og-check-list">
+          @foreach (var t in _types)
+          {
+            <label class="og-check" @key="t.Key">
+              <input type="checkbox" class="mud-checkbox" checked="@f.Parents.Contains(t.Key)" @onchange="() => { if (!f.Parents.Remove(t.Key)) f.Parents.Add(t.Key); }" />
+              <span>@Name(t.NameEn, t.NameAr)</span>
+            </label>
+          }
+        </div>
+      </fieldset>
+      <label class="og-check">
+        <input type="checkbox" class="mud-checkbox" @bind="f.HoldsCategories" />
+        <span>@L["Its units hold post categories (at least one), like a Section"]</span>
+      </label>
+      @if (_formError is not null)
+      {
+        <p class="mud-input-helper-text mud-input-error" role="alert">@_formError</p>
+      }
+    }
+  </ChildContent>
+  <Actions>
+    <button type="button" class="mud-button-root mud-button-text mud-button-surface mud-button-medium" @onclick="() => _type = null">@L["Cancel"]</button>
+    <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-medium" @onclick="SaveTypeAsync" disabled="@Busy">@L["Save"]</button>
+  </Actions>
+</Modal>
+
+@code {
+  private sealed class TypeForm
+  {
+    public string Key { get; set; } = "";
+    public string NameEn { get; set; } = "";
+    public string NameAr { get; set; } = "";
+    public int Order { get; set; } = 50;
+    public bool HoldsCategories { get; set; }
+    public HashSet<string> Parents { get; } = [];
+  }
+
+  protected override string PageKey => "settings";
+
+  private IReadOnlyList<UnitTypeDto> _types = [];
+  private TypeForm? _type;
+  private string? _formError;
+  private string? _check;
+  private bool _checkOk;
+
+  protected override async Task LoadOrgAsync(OrgDto org)
+  {
+    await RunAsync(async () => _types = [.. (await Api.ListUnitTypesAsync(org.Id)).OrderBy(t => t.Order).ThenBy(t => t.Key)], toast: false);
+    await LoadRightsAsync(org);
+  }
+
+  private string TypeName(string key) => _types.FirstOrDefault(t => t.Key == key) is { } t ? Name(t.NameEn, t.NameAr) : key;
+
+  private async Task CheckAsync()
+  {
+    _check = null;
+    try
+    {
+      var orgs = await Api.ListOrgsAsync();
+      (_check, _checkOk) = (L["Connected: {0} organizations visible to you.", orgs.Count], true);
+    }
+    catch (AccessTokenNotAvailableException ex) { ex.Redirect(); }
+    catch (Exception e)
+    {
+      (_check, _checkOk) = (Describe(e), false);
+    }
+  }
+
+  private async Task SaveTypeAsync()
+  {
+    if (_type is not { } f || Org is not { } org) return;
+    _formError = null;
+    if (string.IsNullOrWhiteSpace(f.Key) || string.IsNullOrWhiteSpace(f.NameEn) || string.IsNullOrWhiteSpace(f.NameAr))
+    {
+      _formError = L["Enter the key and both names."];
+      return;
+    }
+    await RunAsync(async () =>
+    {
+      var saved = await Api.CreateUnitTypeAsync(org.Id, new CreateUnitTypeRequest
+      {
+        Key = f.Key.Trim(), NameEn = f.NameEn.Trim(), NameAr = f.NameAr.Trim(), AllowedParents = [.. f.Parents], HoldsCategories = f.HoldsCategories, Order = f.Order,
+      });
+      await MudTail.ToastAsync(L["{0} saved.", Name(saved.NameEn, saved.NameAr)], "success");
+      _type = null;
+    }, () => LoadOrgAsync(org));
+  }
+}

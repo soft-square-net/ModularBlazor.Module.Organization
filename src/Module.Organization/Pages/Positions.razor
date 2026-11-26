@@ -1,0 +1,203 @@
+@page "/organization/positions"
+@inherits OrgPageBase
+
+@*
+  The org's positions (GET/POST/PUT .../positions): a named job (Manager, Unit admin, ...) with the permissions it
+  gives on a member's unit and everything below it. The permissions come from the platform's permission catalog
+  (GET api/identity/permissions: every installed module's declared ones); a deployment's connector writes them as
+  grants on unit:{id}. Changing positions is for customer admins.
+*@
+
+<PageHeader Title="@L["Positions"]" />
+
+<div class="mud-container og-page">
+  <OrgBar Orgs="Orgs" Org="Org" Current="positions" />
+
+  @if (Error is not null)
+  {
+    <p class="mud-typography mud-typography-body2 og-error" role="alert">@Error</p>
+  }
+
+  @if (Org is null)
+  {
+    <p class="mud-typography mud-typography-body2 og-muted">@(Orgs is null ? L["Loading…"] : L["Choose an organization."])</p>
+  }
+  else
+  {
+    <header class="og-header">
+      <p class="mud-typography mud-typography-body1 og-muted">
+        @L["A position gives its permissions to every member who holds it, on the member's unit and everything below it."]
+      </p>
+      <div class="og-actions">
+        @if (Rights.Administers)
+        {
+          <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-medium" @onclick="() => Open(null)" disabled="@Busy">@L["New position"]</button>
+        }
+      </div>
+    </header>
+
+    @if (_positions.Count == 0)
+    {
+      <p class="mud-typography mud-typography-body2 og-muted">@L["No positions yet."]</p>
+    }
+    <div class="og-cards">
+      @foreach (var position in _positions)
+      {
+        <article class="mud-paper mud-elevation-1 og-card" @key="position.Id">
+          <header class="og-card__head">
+            <h2 class="mud-typography mud-typography-h6">@Name(position.NameEn, position.NameAr)</h2>
+            <span class="og-muted mud-typography-caption" dir="ltr">@position.Key</span>
+          </header>
+          <p class="mud-typography mud-typography-body2 og-muted">@(IsRtl ? position.NameEn : position.NameAr)</p>
+          @if (position.Permissions.Count == 0)
+          {
+            <p class="mud-input-helper-text">@L["No permissions: the position names the job only."]</p>
+          }
+          else
+          {
+            <div class="mud-lookup-picker__chips">
+              @foreach (var permission in position.Permissions)
+              {
+                var unknown = !_catalog.IsEmpty && !_catalog.Contains(permission);
+                <span class="mud-lookup-chip @(unknown ? "og-chip--unknown" : "")" dir="ltr" title="@(unknown ? L["Not in this deployment's catalog."] : _catalog.Describe(permission))">@permission</span>
+              }
+            </div>
+          }
+          <p class="mud-typography mud-typography-caption og-muted">@L["{0} members hold it", _holders.GetValueOrDefault(position.Id)]</p>
+          @if (Rights.Administers)
+          {
+            <div class="og-row-actions">
+              <button type="button" class="mud-button-root mud-button-text mud-button-primary mud-button-small" @onclick="() => Open(position)">@L["Edit"]</button>
+            </div>
+          }
+        </article>
+      }
+    </div>
+  }
+</div>
+
+<Modal Open="_form is not null" Title="@(_form?.Id is null ? L["New position"] : L["Edit {0}", _form.NameEn])" MaxWidth="720px" OnClose="() => _form = null">
+  <ChildContent>
+    @if (_form is { } f)
+    {
+      <div class="og-grid">
+        <div class="mud-input-control">
+          <label class="mud-input-label" for="og-pos-key">@L["Key"]<span class="mud-required"> *</span></label>
+          <div class="mud-input-wrapper"><input id="og-pos-key" class="mud-input-slot" dir="ltr" @bind="f.Key" disabled="@(f.Id is not null)" placeholder="editor" /></div>
+        </div>
+        <div class="mud-input-control">
+          <label class="mud-input-label" for="og-pos-en">@L["English name"]<span class="mud-required"> *</span></label>
+          <div class="mud-input-wrapper"><input id="og-pos-en" class="mud-input-slot" dir="ltr" lang="en" @bind="f.NameEn" /></div>
+        </div>
+        <div class="mud-input-control">
+          <label class="mud-input-label" for="og-pos-ar">@L["Arabic name"]<span class="mud-required"> *</span></label>
+          <div class="mud-input-wrapper"><input id="og-pos-ar" class="mud-input-slot" dir="rtl" lang="ar" @bind="f.NameAr" /></div>
+        </div>
+      </div>
+      <h3 class="mud-typography mud-typography-subtitle1">@L["Permissions"]</h3>
+      <PermissionPicker Catalog="_catalog" CatalogError="_catalogError" Selected="f.Permissions" SelectedChanged="p => f.Permissions = p" />
+      @if (_formError is not null)
+      {
+        <p class="mud-input-helper-text mud-input-error" role="alert">@_formError</p>
+      }
+    }
+  </ChildContent>
+  <Actions>
+    <button type="button" class="mud-button-root mud-button-text mud-button-surface mud-button-medium" @onclick="() => _form = null">@L["Cancel"]</button>
+    <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-medium" @onclick="SaveAsync" disabled="@Busy">@L["Save"]</button>
+  </Actions>
+</Modal>
+
+@code {
+  private sealed class PositionForm
+  {
+    public Guid? Id { get; init; }
+    public int Version { get; init; }
+    public string Key { get; set; } = "";
+    public string NameEn { get; set; } = "";
+    public string NameAr { get; set; } = "";
+    public List<string> Permissions { get; set; } = [];
+  }
+
+  protected override string PageKey => "positions";
+
+  private IReadOnlyList<PositionDto> _positions = [];
+  private Dictionary<Guid, int> _holders = [];
+  private PermissionCatalog _catalog = PermissionCatalog.Empty;
+  private string? _catalogError;
+  private PositionForm? _form;
+  private string? _formError;
+
+  protected override async Task LoadOrgAsync(OrgDto org)
+  {
+    await ReloadAsync();
+    await LoadCatalogAsync();
+  }
+
+  private async Task ReloadAsync()
+  {
+    if (Org is not { } org) return;
+    IReadOnlyList<MembershipDto> memberships = [];
+    await RunAsync(async () =>
+    {
+      var positions = Api.ListPositionsAsync(org.Id);
+      var all = Api.ListMembershipsAsync(org.Id);
+      _positions = [.. (await positions).OrderBy(p => p.Key, StringComparer.Ordinal)];
+      memberships = await all;
+      _holders = memberships.Where(m => m.PositionId is not null && (m.To is null || m.To > DateTimeOffset.UtcNow))
+        .GroupBy(m => m.PositionId!.Value).ToDictionary(g => g.Key, g => g.Select(m => m.PersonId).Distinct().Count());
+    }, toast: false);
+    await LoadRightsAsync(org, memberships: null, positions: _positions);
+  }
+
+  /// <summary>The permission catalog of this deployment; without access.grants.manage the picker takes typed names.</summary>
+  private async Task LoadCatalogAsync()
+  {
+    _catalogError = null;
+    try
+    {
+      using var response = await Gateway.GetAsync(PermissionCatalog.Url);
+      if (response.IsSuccessStatusCode) _catalog = PermissionCatalog.Parse(await response.Content.ReadAsStringAsync());
+      else
+      {
+        _catalog = PermissionCatalog.Empty;
+        _catalogError = (int)response.StatusCode is 401 or 403
+          ? L["The permission catalog needs access.grants.manage in your tenant. Type the permission names instead."]
+          : L["The permission catalog could not be read ({0}). Type the permission names instead.", (int)response.StatusCode];
+      }
+    }
+    catch (AccessTokenNotAvailableException ex) { ex.Redirect(); }
+    catch (Exception e) when (e is HttpRequestException or System.Text.Json.JsonException)
+    {
+      _catalog = PermissionCatalog.Empty;
+      _catalogError = L["The permission catalog could not be read ({0}). Type the permission names instead.", e.Message];
+    }
+  }
+
+  private void Open(PositionDto? position)
+  {
+    _formError = null;
+    _form = position is null
+      ? new PositionForm()
+      : new PositionForm { Id = position.Id, Version = position.Version, Key = position.Key, NameEn = position.NameEn, NameAr = position.NameAr, Permissions = [.. position.Permissions] };
+  }
+
+  private async Task SaveAsync()
+  {
+    if (_form is not { } f || Org is not { } org) return;
+    _formError = null;
+    if (string.IsNullOrWhiteSpace(f.Key) || string.IsNullOrWhiteSpace(f.NameEn) || string.IsNullOrWhiteSpace(f.NameAr))
+    {
+      _formError = L["Enter the key and both names."];
+      return;
+    }
+    await RunAsync(async () =>
+    {
+      var saved = f.Id is { } id
+        ? await Api.UpdatePositionAsync(org.Id, id, new UpdatePositionRequest { Version = f.Version, NameEn = f.NameEn.Trim(), NameAr = f.NameAr.Trim(), Permissions = f.Permissions })
+        : await Api.CreatePositionAsync(org.Id, new CreatePositionRequest { Key = f.Key.Trim(), NameEn = f.NameEn.Trim(), NameAr = f.NameAr.Trim(), Permissions = f.Permissions });
+      await MudTail.ToastAsync(L["{0} saved.", Name(saved.NameEn, saved.NameAr)], "success");
+      _form = null;
+    }, ReloadAsync);
+  }
+}

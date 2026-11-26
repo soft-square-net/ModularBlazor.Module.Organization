@@ -1,0 +1,90 @@
+@inject IStringLocalizerFactory Texts
+
+@*
+  A position's permissions, from the platform's permission catalog (every installed module's declared permissions),
+  grouped by module. Permissions the catalog does not know (a module that is not installed in this deployment) stay
+  as chips marked unknown. Without the catalog (it needs access.grants.manage in the current tenant), names are typed.
+*@
+
+<div class="og-permissions" role="group" aria-label="@L["Permissions"]">
+  @if (Selected.Count > 0)
+  {
+    <div class="mud-lookup-picker__chips" aria-label="@L["Selected permissions"]">
+      @foreach (var name in Selected)
+      {
+        var unknown = !Catalog.IsEmpty && !Catalog.Contains(name);
+        <span class="mud-lookup-chip mud-lookup-chip--selected @(unknown ? "og-chip--unknown" : "")" dir="ltr"
+              title="@(unknown ? L["Not in this deployment's catalog."] : Catalog.Describe(name))">
+          @name
+          <button type="button" aria-label="@L["Remove {0}", name]" @onclick="() => ToggleAsync(name)">✕</button>
+        </span>
+      }
+    </div>
+  }
+  else
+  {
+    <p class="mud-input-helper-text">@L["No permissions yet: the position names the job only."]</p>
+  }
+
+  @if (CatalogError is not null)
+  {
+    <p class="mud-input-helper-text" role="status">@CatalogError</p>
+  }
+
+  @foreach (var group in Catalog.Groups)
+  {
+    <details class="og-permissions__group" open="@group.Permissions.Any(p => Selected.Contains(p.Name))">
+      <summary class="mud-typography-subtitle2">@group.ModuleName <span class="og-muted">(@group.Permissions.Count(p => Selected.Contains(p.Name))/@group.Permissions.Count)</span></summary>
+      @foreach (var permission in group.Permissions)
+      {
+        var chosen = Selected.Contains(permission.Name);
+        <label class="mud-lookup-picker__row @(chosen ? "selected" : "")" @key="permission.Name">
+          <input type="checkbox" class="mud-checkbox" checked="@chosen" @onchange="() => ToggleAsync(permission.Name)" />
+          <span class="mud-lookup-picker__text" dir="ltr">@permission.Name</span>
+          @if (!string.IsNullOrWhiteSpace(permission.Description))
+          {
+            <span class="mud-lookup-picker__cell og-muted">@permission.Description</span>
+          }
+        </label>
+      }
+    </details>
+  }
+
+  <div class="og-inline-add">
+    <div class="mud-input-wrapper mud-input-wrapper--dense">
+      <input class="mud-input-slot" dir="ltr" aria-label="@L["Permission name"]" placeholder="shifts.manage" @bind="_typed" @onkeydown="AddOnEnter" />
+    </div>
+    <button type="button" class="mud-button-root mud-button-outlined mud-button-primary mud-button-small" @onclick="AddTypedAsync">@L["Add"]</button>
+  </div>
+  @if (_typedError is not null)
+  {
+    <p class="mud-input-helper-text mud-input-error" role="alert">@_typedError</p>
+  }
+</div>
+
+@code {
+  [Parameter] public PermissionCatalog Catalog { get; set; } = PermissionCatalog.Empty;
+  [Parameter] public string? CatalogError { get; set; }
+  [Parameter] public IReadOnlyList<string> Selected { get; set; } = [];
+  [Parameter] public EventCallback<List<string>> SelectedChanged { get; set; }
+
+  private string _typed = "";
+  private string? _typedError;
+  private IStringLocalizer? _l;
+  private IStringLocalizer L => _l ??= Texts.Create(typeof(OrganizationPageBase));
+
+  private Task ToggleAsync(string name) =>
+    SelectedChanged.InvokeAsync(Selected.Contains(name) ? [.. Selected.Where(s => s != name)] : [.. Selected, name]);
+
+  private async Task AddTypedAsync()
+  {
+    var name = _typed.Trim();
+    _typedError = null;
+    if (name.Length == 0) return;
+    if (!PermissionNames.IsValid(name)) { _typedError = L["A permission name is lower case and dotted, like shifts.manage."]; return; }
+    _typed = "";
+    if (!Selected.Contains(name)) await SelectedChanged.InvokeAsync([.. Selected, name]);
+  }
+
+  private Task AddOnEnter(KeyboardEventArgs e) => e.Key == "Enter" ? AddTypedAsync() : Task.CompletedTask;
+}
