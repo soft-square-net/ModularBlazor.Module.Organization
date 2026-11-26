@@ -283,16 +283,32 @@ public sealed class ReplicaInitializer(
 }
 
 /// <summary>
-/// The scopes of a <c>unit:{id}</c> live topic, server-side: the unit's own and its ancestors' (<c>unit:{ancestor}</c>,
-/// from the replica's paths), so a grant on a Department covers the topics of its Sections. Never what a client sends.
-/// Unknown units, and units the tenant cannot see, have none.
+/// The module's <see cref="ILiveScopeResolver"/>, server-side scopes only (never what a client sends), from the
+/// subscriber's tenant replica. Anything it does not know gets no scopes, so only the topic's exact scope counts
+/// (fails closed):
+/// <list type="bullet">
+/// <item><c>unit:{id}</c>: the unit's own scope and its ancestors' (<c>unit:{ancestor}</c>, from the replica's paths), so
+/// a grant on a Department covers the topics of its Sections. Units the tenant cannot see have none.</item>
+/// <item><c>organization:org:{orgId:N}</c> (<see cref="OrgLiveTopic"/>): the org's root unit <c>unit:{root}</c>, when the
+/// tenant's replica follows that org, so an <c>org.read</c> grant on the whole org counts. A grant on a unit below
+/// the root does not: the topic speaks for the whole org.</item>
+/// </list>
 /// </summary>
-public sealed class UnitLiveScopes(IUnitDirectory directory) : ILiveScopeResolver
+public sealed class UnitLiveScopes(IUnitDirectory directory, ReplicaDbContext db) : ILiveScopeResolver
 {
     public async Task<IReadOnlyList<string>> ScopesAsync(string kind, string key, CancellationToken ct)
     {
+        if (kind == OrgLiveTopic.Kind) return await OrgScopesAsync(key, ct);
         if (kind != LiveTopics.UnitKind || !Guid.TryParse(key, out var unitId)) return [];
         return await directory.GetAsync(unitId, ct) is { } unit ? UnitScopes.For(unit.Path) : [];
+    }
+
+    private async Task<IReadOnlyList<string>> OrgScopesAsync(string key, CancellationToken ct)
+    {
+        if (!Guid.TryParseExact(key, "N", out var orgId)) return [];
+        if (await db.Sync.AsNoTracking().FirstOrDefaultAsync(ct) is not { } state || state.OrgId != orgId) return [];
+        var root = await db.Units.AsNoTracking().Where(u => u.OrgId == orgId && u.ParentId == null).Select(u => (Guid?)u.Id).FirstOrDefaultAsync(ct);
+        return root is { } id ? [UnitScopes.Of(id)] : [];
     }
 }
 

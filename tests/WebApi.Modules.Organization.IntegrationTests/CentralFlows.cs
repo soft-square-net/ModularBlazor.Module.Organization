@@ -29,7 +29,7 @@ public sealed class CentralFlows : IDisposable
     private async Task<OrgUnitDto> AddUnitAsync(Guid orgId, Guid parentId, string type, string name, TestCaller? caller = null, params string[] categories)
     {
         var result = await _db.Run<CreateUnitHandler, Result<OrgUnitDto>>(caller ?? Db.PlatformAdmin,
-            h => h.Handle(new CreateUnitCommand(orgId, new CreateUnitRequest(parentId, type, name, null, null, null, categories)), Ct));
+            h => h.Handle(new CreateUnitCommand(orgId, new CreateUnitRequest(parentId, type, name, null!, null, null, categories)), Ct));
         result.IsSuccess.ShouldBeTrue(string.Join("; ", result.Errors));
         return result.Value;
     }
@@ -49,7 +49,7 @@ public sealed class CentralFlows : IDisposable
         positions.Value.Select(p => p.Key).ShouldBe([PositionDefinition.ManagerKey, PositionDefinition.UnitAdminKey]);
 
         var duplicate = await _db.Run<CreateOrgHandler, Result<OrgDto>>(Db.PlatformAdmin,
-            h => h.Handle(new CreateOrgCommand(new CreateOrgRequest("acme", "Again", null)), Ct));
+            h => h.Handle(new CreateOrgCommand(new CreateOrgRequest("acme", "Again", null!)), Ct));
         duplicate.Status.ShouldBe(ResultStatus.Conflict);
     }
 
@@ -111,14 +111,14 @@ public sealed class CentralFlows : IDisposable
         section.ParentId.ShouldBe(department.Id);
 
         var above = await _db.Run<CreateUnitHandler, Result<OrgUnitDto>>(asManager,
-            h => h.Handle(new CreateUnitCommand(org.Id, new CreateUnitRequest(sector.Id, "department", "Other", null)), Ct));
+            h => h.Handle(new CreateUnitCommand(org.Id, new CreateUnitRequest(sector.Id, "department", "Other", null!)), Ct));
         above.Status.ShouldBe(ResultStatus.Forbidden);
         var stranger = await _db.Run<ListUnitsHandler, Result<IReadOnlyList<OrgUnitDto>>>(Db.User("nobody"), h => h.Handle(new ListUnitsQuery(org.Id), Ct));
         stranger.Status.ShouldBe(ResultStatus.Forbidden);
         var member = await _db.Run<ListUnitsHandler, Result<IReadOnlyList<OrgUnitDto>>>(asManager, h => h.Handle(new ListUnitsQuery(org.Id), Ct));
         member.Value.Count.ShouldBe(4);
         var customerAdmin = await _db.Run<CreateUnitHandler, Result<OrgUnitDto>>(Db.User("customer-admin"),
-            h => h.Handle(new CreateUnitCommand(org.Id, new CreateUnitRequest(sector.Id, "department", "Other", null)), Ct));
+            h => h.Handle(new CreateUnitCommand(org.Id, new CreateUnitRequest(sector.Id, "department", "Other", null!)), Ct));
         customerAdmin.IsSuccess.ShouldBeTrue();
     }
 

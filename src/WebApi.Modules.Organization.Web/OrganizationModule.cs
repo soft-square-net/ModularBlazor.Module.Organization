@@ -47,7 +47,13 @@ public sealed class OrganizationModule : IRuntimeModule
         Permissions = OrganizationPermissions.All,
         // unit:{id} topics: the platform's unit topics, provided by this module (the only one that declares the kind).
         // Subscribers need org.read on the unit or one of its ancestors (UnitLiveScopes gives the ancestors).
-        LiveTopics = [new LiveTopic(LiveTopics.UnitKind, OrganizationPermissions.Read)]
+        // organization:org:{orgId:N} (OrgLiveTopic): a nudge after any change of the org; org.read on org:{id} or on
+        // the org's root unit.
+        LiveTopics =
+        [
+            new LiveTopic(LiveTopics.UnitKind, OrganizationPermissions.Read),
+            new LiveTopic(OrgLiveTopic.Kind, OrganizationPermissions.Read)
+        ]
     };
 
     public void ConfigureServices(IServiceCollection services, IConfiguration settings) => services.AddServiceConfigs(settings);

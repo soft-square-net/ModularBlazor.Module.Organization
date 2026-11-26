@@ -5,6 +5,7 @@ using soft.square.net.WebApi.Data;
 using soft.square.net.WebApi.Modules.Organization.Core;
 using soft.square.net.WebApi.Modules.Organization.Core.OrgUnitAggregate;
 using soft.square.net.WebApi.Modules.Organization.Infrastructure.Data.Config;
+using soft.square.net.WebApi.Modules.Organization.Infrastructure.Data;
 using CentralSeed = soft.square.net.WebApi.Modules.Organization.Core.TenantSeedAggregate.TenantSeed;
 
 namespace soft.square.net.WebApi.Modules.Organization.Infrastructure.Connector;
@@ -36,6 +37,13 @@ public sealed class ReplicaDbContext(DbContextOptions<ReplicaDbContext> options,
     public DbSet<MembershipReplica> Memberships => Set<MembershipReplica>();
     public DbSet<LinkReplica> Links => Set<LinkReplica>();
     public DbSet<SyncState> Sync => Set<SyncState>();
+
+    /// <summary>Every time is stored as UTC (<see cref="UtcTimeConventions"/>).</summary>
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        base.ConfigureConventions(configurationBuilder);
+        configurationBuilder.StoreDateTimeOffsetsAsUtc();
+    }
 
     // Configured here, not with IEntityTypeConfiguration classes: OrganizationDbContext applies every configuration
     // class of this assembly to the central model.

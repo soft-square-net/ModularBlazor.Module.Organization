@@ -72,6 +72,19 @@ Tokens are accepted only from `Organization:TrustedIssuers` (comma-separated; em
 Every write takes the item's `version` and answers 409 if it changed since. Other modules use the
 `Organization.Contracts` package: its `UnitScopes.For(path)` gives the `unit:{id}` scope of every unit on a path.
 
+- **Times are UTC.** Every `DateTimeOffset` the module stores is normalized to UTC (offset zero, the same instant):
+  the membership `from`/`until` a client sends in its local offset, and everything else through a model-wide
+  converter on both DbContexts (PostgreSQL's `timestamptz` refuses other offsets). Answers carry UTC times.
+- **Database failures.** A save that breaks a unique key (the same key twice, a second primary membership) or refers
+  to a removed row is a 409 that says so. Anything else the database refuses is a 500 "Not saved" with the exception
+  type only; the full error is in the server log.
+- **Live.** After each committed change of an org (its units, unit types, persons, memberships, positions, seeds and
+  links) the service publishes one `org.changed` message on the topic `organization:org:{orgId:N}`
+  (`OrgLiveTopic` in Contracts), with the payload `{ type, id }` (the changed item, or `{ "type": "org", "id": orgId }`
+  for several) and no sequence. It is sent in the tenant of the request that made the change (none outside a
+  tenant); each deployment's connector sends it again in its tenants once it applies the change. The Units page
+  reloads on it. Subscribers need `org.read` on `org:{orgId:N}` or on the org's root unit.
+
 ## The connector
 
 Every deployment runs it; it is active once `Organization:CentralUrl` names the central service's module route
@@ -102,10 +115,14 @@ Every deployment runs it; it is active once `Organization:CentralUrl` names the 
 - **Reads.** `IUnitDirectory` (in `Organization.Contracts`) over the replica: the module uses it directly, other
   modules through `HttpUnitDirectory` and the local API below. A unit's `CategoriesOf` is its own (a Section) or those
   of the tenant's units below it.
-- **Live.** The manifest declares the platform's `unit` topic kind with `org.read`; the module's `ILiveScopeResolver`
-  gives a `unit:{id}` topic the scopes of the unit and its ancestors, from the replica (never from the client). After
-  each applied change it publishes to the unit's topic and its ancestors'. **Load the module on the core pool too**:
-  the live hub runs there, and without the module on the hub's replica only a grant on the exact unit counts.
+- **Live.** The manifest declares the platform's `unit` topic kind and the module's `org` kind, both with `org.read`.
+  The module's `ILiveScopeResolver` works from the subscriber's tenant replica, never from the client, and fails
+  closed (unknown keys get no scopes, so only the exact scope counts): a `unit:{id}` topic gets the scopes of the unit
+  and its ancestors; `organization:org:{orgId:N}` gets the org's root unit `unit:{root}` when the tenant's replica
+  follows that org (a grant below the root does not count: the topic speaks for the whole org). After each applied
+  feed page it publishes to the changed units' topics and their ancestors', and one `org.changed` message on the org
+  topic, all without a sequence (the feed's ids are not contiguous per topic). **Load the module on the core pool
+  too**: the live hub runs there, and without the module on the hub's replica only the exact scope counts.
 
 | Local route (tenant required, signed in) | What |
 | --- | --- |
@@ -144,6 +161,19 @@ up in review:
 ./src/WebApi/scripts/Export-ModuleOpenApi.ps1 -Project <this repo>/src/WebApi.Modules.Organization.Web -ModuleId organization `
     -Output <this repo>/src/openapi/organization.json
 ```
+
+## Packages
+
+`.github/workflows/packages.yml` packs two NuGet packages on every pull request and push to `main`
+(`1.0.0-ci.<run>`, kept as the workflow's `packages` artifact) and publishes them to the soft-square-net GitHub
+Packages feed only for a `v*` tag (`v1.2.0` gives `1.2.0`):
+
+| Package | Project | What |
+| --- | --- | --- |
+| `soft.square.net.Organization.Contracts` | `src/Organization.Contracts` | DTOs, `org.*` v1 events, `IOrganizationClient`, `IUnitDirectory`, `UnitScopes`, `OrgLiveTopic`; BCL only |
+| `soft.square.net.Organization.Client` | `src/WebApi.Modules.Organization.Client` | the typed NSwag client of the API, for callers outside the client module catalog |
+
+Locally: `dotnet pack src/Organization.Contracts -o artifacts/packages` (and the same for the Client project).
 
 ## Installing
 

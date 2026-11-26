@@ -79,14 +79,26 @@ public static class InfrastructureServiceExtensions
     }
 }
 
-/// <summary>The unit of work over the central context: one SaveChanges for everything a use case changed.</summary>
-public sealed class EfOrgStore(OrganizationDbContext db) : IOrgStore
+/// <summary>
+/// The unit of work over the central context: one SaveChanges for everything a use case changed, then, after the
+/// commit, the org's live message (<see cref="OrgLiveNudges"/>).
+/// </summary>
+public sealed class EfOrgStore(OrganizationDbContext db, IServiceProvider services) : IOrgStore
 {
     public void Add<T>(T entity) where T : class, SharedKernel.IAggregateRoot => db.Set<T>().Add(entity);
 
     public void Remove<T>(T entity) where T : class, SharedKernel.IAggregateRoot => db.Set<T>().Remove(entity);
 
-    public Task SaveAsync(CancellationToken ct) => db.SaveChangesAsync(ct);
+    public async Task SaveAsync(CancellationToken ct)
+    {
+        // SavingChanges runs inside the save, after the domain event handlers added their changes, before the write.
+        IReadOnlyDictionary<Guid, List<OrgChange>> changed = new Dictionary<Guid, List<OrgChange>>();
+        void Collect(object? sender, SavingChangesEventArgs e) => changed = OrgLiveNudges.Pending(db.ChangeTracker);
+        db.SavingChanges += Collect;
+        try { await db.SaveChangesAsync(ct); }
+        finally { db.SavingChanges -= Collect; }
+        await OrgLiveNudges.PublishAsync(services, changed, ct);
+    }
 }
 
 /// <summary>

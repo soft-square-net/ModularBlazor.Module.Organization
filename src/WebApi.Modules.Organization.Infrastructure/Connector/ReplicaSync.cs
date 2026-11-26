@@ -7,6 +7,7 @@ using soft.square.net.Organization.Contracts;
 using soft.square.net.WebApi.Contracts.Live;
 using soft.square.net.WebApi.Contracts.Messaging;
 using soft.square.net.WebApi.Contracts.Security;
+using soft.square.net.WebApi.Modules.Organization.Core;
 using soft.square.net.WebApi.Modules.Organization.UseCases;
 using soft.square.net.WebApi.Modules.Organization.UseCases.Connector;
 
@@ -65,6 +66,7 @@ public sealed class ReplicaSync(
             {
                 if (!window.IsNew(entry.Sequence)) continue;
                 Apply(set, entry, changes, publish: true);
+                changes.Applied.Add(OrgLiveTopic.FromSubject(entry.Subject));
                 window.MarkApplied(entry.Sequence, entry.OccurredAt);
                 applied++;
             }
@@ -79,7 +81,7 @@ public sealed class ReplicaSync(
 
             published += changes.Published;
             seedsChanged |= changes.SeedsChanged;
-            await NotifyAsync(changes, ct);
+            await NotifyAsync(binding.OrgId, changes, ct);
 
             if (!page.More || page.Entries.Count == 0 || page.Next <= after) break;
             after = page.Next;
@@ -291,8 +293,8 @@ public sealed class ReplicaSync(
             existing.PositionId = m.PositionId;
             existing.PositionKey = m.PositionKey;
             existing.Permissions = m.PositionId is { } p && set.Positions.GetValueOrDefault(p) is { } position ? [.. position.Permissions] : [.. m.Permissions];
-            existing.From = m.From;
-            existing.To = m.To;
+            existing.From = m.From.ToUtc();
+            existing.To = m.To.ToUtc();
             existing.Primary = m.Primary;
         }
         changes.GrantUnits.Add(m.UnitId);
@@ -421,21 +423,34 @@ public sealed class ReplicaSync(
         await db.SaveChangesAsync(ct);
     }
 
-    /// <summary>Tells the browsers watching the changed units (and their ancestors); best effort, after the commit.</summary>
-    private async Task NotifyAsync(Changes changes, CancellationToken ct)
+    /// <summary>
+    /// Tells the browsers watching the changed units (and their ancestors), and those watching the org
+    /// (<see cref="OrgLiveTopic"/>, one message for the page); best effort, after the commit. No sequence: the feed's ids
+    /// are not contiguous per topic, so a client's gap check would turn nearly every message into a resync.
+    /// </summary>
+    private async Task NotifyAsync(Guid orgId, Changes changes, CancellationToken ct)
     {
-        if (changes.LiveMessages.Count == 0 || services.GetService<ILiveNotifier>() is not { } live) return;
+        if (changes.Applied.Count == 0 || services.GetService<ILiveNotifier>() is not { } live) return;
         foreach (var (path, type, entry) in changes.LiveMessages)
         {
             try
             {
                 var payload = JsonSerializer.SerializeToElement(new { entry.Type, entry.Subject, entry.Sequence }, Json);
-                await live.PublishToUnitAsync(path, type, payload, entry.Sequence, ct);
+                await live.PublishToUnitAsync(path, type, payload, sequence: null, ct);
             }
             catch (Exception e) when (e is not OperationCanceledException)
             {
                 log.LogDebug(e, "Live message {Type} for {Path} was not sent.", type, path);
             }
+        }
+        try
+        {
+            var payload = JsonSerializer.SerializeToElement(OrgLiveTopic.Summarize(orgId, changes.Applied), Json);
+            await live.PublishAsync(OrgLiveTopic.Topic(orgId), OrgLiveTopic.ChangedMessage, payload, sequence: null, ct);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            log.LogDebug(e, "Live message for org {OrgId} was not sent.", orgId);
         }
     }
 
@@ -443,6 +458,7 @@ public sealed class ReplicaSync(
     {
         public HashSet<Guid> GrantUnits { get; } = [];
         public List<(string Path, string Type, FeedEntryDto Entry)> LiveMessages { get; } = [];
+        public List<OrgChange> Applied { get; } = [];
         public int Published { get; set; }
         public bool SeedsChanged { get; set; }
         public bool UnitsEntered { get; set; }
