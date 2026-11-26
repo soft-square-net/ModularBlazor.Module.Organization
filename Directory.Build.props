@@ -8,6 +8,12 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
+    <!--
+      The bundle's one version: the server manifest (OrganizationModule.Version), the client parts and the packages.
+      Raise it for every release; the release tag is v$(Version) (packages.yml checks that they agree).
+    -->
+    <VersionPrefix>1.0.0</VersionPrefix>
+    <VersionSuffix>preview.1</VersionSuffix>
   </PropertyGroup>
 
   <!--
