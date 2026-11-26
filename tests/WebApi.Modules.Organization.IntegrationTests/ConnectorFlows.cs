@@ -8,6 +8,7 @@ using soft.square.net.WebApi.Contracts.Messaging;
 using soft.square.net.WebApi.Contracts.Security;
 using soft.square.net.WebApi.Contracts.Tenancy;
 using soft.square.net.WebApi.Data.Messaging;
+using soft.square.net.WebApi.SharedKernel;
 using soft.square.net.WebApi.Modules.Organization.Core.PositionAggregate;
 using soft.square.net.WebApi.Modules.Organization.Infrastructure.Connector;
 using soft.square.net.WebApi.Modules.Organization.IntegrationTests.Data;
@@ -228,6 +229,32 @@ public sealed class ConnectorFlows : IDisposable
         _replica.Grants.All.ShouldNotContain(g => g.UserId == "carol");
         var football = await new ReplicaUnitDirectory(_replica.NewContext()).GetAsync(t.Football.Id, Ct);
         football!.Path.ShouldBe(UnitPaths.Child(UnitPaths.Child(t.News.Path, t.Sports.Id), t.Football.Id));
+    }
+
+    [Fact]
+    public async Task ASectionServingEveryCategoryMakesItsParentsCategoriesTheWildcard()
+    {
+        var t = await BuildAsync();
+        var updated = await _central.Run<UpdateUnitHandler, Result<OrgUnitDto>>(Db.PlatformAdmin,
+            h => h.Handle(new UpdateUnitCommand(t.Org.Id, t.Tennis.Id, new UpdateUnitRequest(t.Tennis.Version, "Tennis", "Tennis", null, null, [UnitCategories.All])), Ct));
+        updated.IsSuccess.ShouldBeTrue(string.Join("; ", updated.Errors));
+        updated.Value.Categories.ShouldBe(["*"]);
+        await Should.ThrowAsync<DomainException>(() => _central.Run<UpdateUnitHandler, Result<OrgUnitDto>>(Db.PlatformAdmin,
+            h => h.Handle(new UpdateUnitCommand(t.Org.Id, t.Football.Id, new UpdateUnitRequest(t.Football.Version, "Football", "Football", null, null, ["*", "c1"])), Ct)));
+
+        await _replica.SyncAsync(t.Binding, Ct);
+
+        var directory = new ReplicaUnitDirectory(_replica.NewContext());
+        (await directory.GetAsync(t.Tennis.Id, Ct))!.Categories.ShouldBe(["*"]);
+        (await directory.CategoriesOfAsync(t.Tennis.Id, Ct)).ShouldBe(["*"]);
+        (await directory.CategoriesOfAsync(t.Football.Id, Ct)).ShouldBe(["c1", "c2"]);
+        (await directory.CategoriesOfAsync(t.Sports.Id, Ct)).ShouldBe(["*"]);
+        (await directory.CategoriesOfAsync(t.News.Id, Ct)).ShouldBe(["*"]);
+        // The unit events carry the wildcard as it is (the last snapshot of Tennis the replica republished).
+        var snapshot = (await _replica.OutboxAsync(Ct)).Where(m => m.Type is OrgEvents.UnitCreated or OrgEvents.UnitUpdated)
+            .Select(m => IntegrationEnvelope.Parse(m.Envelope))
+            .Last(e => e.Subject == OrgEvents.UnitSubject(t.Tennis.Id)).Data.GetProperty("unit").GetProperty("categories");
+        snapshot.EnumerateArray().Select(c => c.GetString()).ShouldBe(["*"]);
     }
 
     [Fact]

@@ -236,5 +236,9 @@
   "Holds post categories": "يحمل فئات المنشورات",
   "Order": "الترتيب",
   "(root)": "(جذر)",
-  "Its units hold post categories (at least one), like a Section": "تحمل وحداته فئات منشورات (واحدة على الأقل)، مثل القسم"
+  "Its units hold post categories (at least one), like a Section": "تحمل وحداته فئات منشورات (واحدة على الأقل)، مثل القسم",
+  "All": "الكل",
+  "All categories": "كل الفئات",
+  "Serves every category (for example Multimedia or SEO)": "يخدم كل الفئات (مثل الوسائط المتعددة أو تحسين محركات البحث)",
+  "All categories can't be combined with other categories.": "لا يمكن الجمع بين كل الفئات وفئات أخرى."
 }

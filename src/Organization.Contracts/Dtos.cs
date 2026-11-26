@@ -28,7 +28,8 @@ public sealed record UnitTypeDto(
 
 /// <summary>
 /// One unit of an org's tree. <see cref="Path"/> lists the ids from the root to this unit (see <see cref="UnitPaths"/>).
-/// <see cref="Categories"/> are Content post category ids (units whose type holds categories only).
+/// <see cref="Categories"/> are Content post category ids (units whose type holds categories only), or <c>["*"]</c>
+/// (<see cref="UnitCategories.All"/>) for a Section that serves every category.
 /// </summary>
 public sealed record OrgUnitDto(
     Guid Id, Guid OrgId, Guid? ParentId, string TypeKey, string Path, string NameEn, string NameAr, IReadOnlyList<string> Tags,

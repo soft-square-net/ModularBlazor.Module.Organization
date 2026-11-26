@@ -362,8 +362,8 @@ public sealed class ReplicaUnitDirectory(ReplicaDbContext db) : IUnitDirectory
         if (unit.Categories.Count > 0) return unit.Categories;
         var prefix = unit.Path + UnitPaths.Separator;
         var below = await db.Units.AsNoTracking().Where(u => u.Path.StartsWith(prefix)).ToListAsync(ct);
-        return [.. below.Where(u => UnitPaths.IsSelfOrBelow(u.Path, root)).OrderBy(u => u.Path, StringComparer.Ordinal)
-            .SelectMany(u => u.Categories).Distinct(StringComparer.Ordinal)];
+        return UnitCategories.Union(below.Where(u => UnitPaths.IsSelfOrBelow(u.Path, root)).OrderBy(u => u.Path, StringComparer.Ordinal)
+            .Select(u => u.Categories));
     }
 
     public async Task<IReadOnlyList<DirectoryMemberDto>> MembersOfAsync(Guid unitId, CancellationToken ct = default)

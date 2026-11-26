@@ -20,7 +20,7 @@ central and connector deployments, the settings reference, tenant seeds, tenant 
 ## Layout
 
 ```
-src/Organization.Contracts/                        the package other modules use: DTOs, org.* v1 events, IOrganizationClient, UnitScopes
+src/Organization.Contracts/                        the package other modules use: DTOs, org.* v1 events, IOrganizationClient, UnitScopes, UnitCategories
 src/WebApi.Modules.Organization.Core/             Core: aggregates (Org, UnitType, OrgUnit, Person, Membership, PositionDefinition, TenantSeed, TenantLink, FeedEntry), rules, specifications
 src/WebApi.Modules.Organization.UseCases/         use cases per resource (Mediator commands and queries returning an Ardalis Result), access rules, the event feed
 src/WebApi.Modules.Organization.Infrastructure/   data: OrganizationDbContext over the central database, configurations, migrations per provider, the startup migrator
@@ -65,7 +65,7 @@ Tokens are accepted only from `Organization:TrustedIssuers` (comma-separated; em
 | --- | --- |
 | `GET/POST /orgs`, `GET/PUT /orgs/{orgId}`, `PUT /orgs/{orgId}/admins` | orgs you can see; create (platform admins: seeds the unit types, positions and root unit) |
 | `GET/POST /orgs/{orgId}/unit-types` | the unit types and which types each may sit under |
-| `GET/POST /orgs/{orgId}/units`, `GET/PUT/DELETE .../units/{unitId}`, `POST .../move`, `GET .../tenant` | the tree; a Section holds at least one Content category id; moving rebases the subtree; `tenant` is the unit's owning tenant seed |
+| `GET/POST /orgs/{orgId}/units`, `GET/PUT/DELETE .../units/{unitId}`, `POST .../move`, `GET .../tenant` | the tree; a Section holds at least one Content category id, or `*` alone for all categories ([docs](docs/en/categories.md)); moving rebases the subtree; `tenant` is the unit's owning tenant seed |
 | `GET/POST /orgs/{orgId}/persons`, `PUT .../persons/{personId}` | people (identity issuer and subject, optional employee profile) |
 | `GET/POST /orgs/{orgId}/memberships`, `PUT/DELETE .../memberships/{membershipId}` | a person in a unit, with an optional position and dates; one primary per person |
 | `GET/POST /orgs/{orgId}/positions`, `PUT .../positions/{positionId}` | position definitions and their permissions |
@@ -121,7 +121,7 @@ Every deployment runs it; it is active once `Organization:CentralUrl` names the 
   through the replica's outbox, with the unit path, for the tenant's units and the root's ancestors.
 - **Reads.** `IUnitDirectory` (in `Organization.Contracts`) over the replica: the module uses it directly, other
   modules through `HttpUnitDirectory` and the local API below. A unit's `CategoriesOf` is its own (a Section) or those
-  of the tenant's units below it.
+  of the tenant's units below it; `["*"]` when one of them serves all categories (`UnitCategories` in Contracts).
 - **Live.** The manifest declares the platform's `unit` topic kind and the module's `org` kind, both with `org.read`.
   The module's `ILiveScopeResolver` works from the subscriber's tenant replica, never from the client, and fails
   closed (unknown keys get no scopes, so only the exact scope counts): a `unit:{id}` topic gets the scopes of the unit
@@ -198,7 +198,7 @@ publishes the packages to the soft-square-net GitHub Packages feed. A tag that d
 
 | Package | Project | What |
 | --- | --- | --- |
-| `soft.square.net.Organization.Contracts` | `src/Organization.Contracts` | DTOs, `org.*` v1 events, `IOrganizationClient`, `IUnitDirectory`, `UnitScopes`, `OrgLiveTopic`; BCL only |
+| `soft.square.net.Organization.Contracts` | `src/Organization.Contracts` | DTOs, `org.*` v1 events, `IOrganizationClient`, `IUnitDirectory`, `UnitScopes`, `UnitCategories`, `OrgLiveTopic`; BCL only |
 | `soft.square.net.Organization.Client` | `src/WebApi.Modules.Organization.Client` | the typed NSwag client of the API, for callers outside the client module catalog |
 
 **Steps for a release** (the maintainers' decision; nothing in a pull request tags or publishes):

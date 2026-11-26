@@ -37,7 +37,10 @@ public static class OrgEvents
     public static string LinkSubject(Guid id) => $"link:{UnitPaths.Id(id)}";
 }
 
-/// <summary>A unit as the unit events carry it.</summary>
+/// <summary>
+/// A unit as the unit events carry it. <see cref="Categories"/>: Content post category ids, or <c>["*"]</c>
+/// (<see cref="UnitCategories.All"/>) for a Section that serves every category.
+/// </summary>
 public sealed record OrgUnitSnapshot(
     Guid UnitId, Guid OrgId, Guid? ParentId, string TypeKey, string Path, string NameEn, string NameAr, IReadOnlyList<string> Tags,
     string? TimeZone, IReadOnlyList<string> Categories, TenantBindingKind Binding, string? SeedId, int Version);

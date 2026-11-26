@@ -67,6 +67,23 @@ public class UnitTreeRules
             .Message.ShouldContain("does not hold post categories");
 
     [Fact]
+    public void ASectionMayServeEveryCategoryWithTheWildcardAlone()
+    {
+        var department = _tree.Department(_tree.Sector());
+        var multimedia = _tree.Section(department, "Multimedia", UnitCategories.All);
+        multimedia.CategoryIds.ShouldBe(["*"]);
+
+        Should.Throw<DomainException>(() => multimedia.Update(_tree.SectionType, "Multimedia", null, null, null, ["*", "c1"], Later))
+            .Message.ShouldContain("can't be combined");
+        multimedia.CategoryIds.ShouldBe(["*"]);
+        Should.Throw<DomainException>(() => OrgUnit.CreateChild(_tree.Root, _tree.OrgType, _tree.SectorType, "News", null, null, null, ["*"], TreeBuilder.Now))
+            .Message.ShouldContain("does not hold post categories");
+
+        multimedia.Update(_tree.SectionType, "Multimedia", null, null, null, ["c1"], Later);
+        multimedia.CategoryIds.ShouldBe(["c1"]);
+    }
+
+    [Fact]
     public void UpdateReplacesCategoriesAndBumpsTheVersion()
     {
         var section = _tree.Section(_tree.Department(_tree.Sector()), "Desk", "c1", "c2");
