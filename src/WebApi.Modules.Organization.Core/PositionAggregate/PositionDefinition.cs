@@ -41,13 +41,15 @@ public sealed class PositionDefinition : AggregateRoot<Guid>
 
     /// <summary>
     /// The positions of a new org: Unit admin (manages the units, members and seeds of its subtree; a seed's admins
-    /// get it on the seed's root unit) and Manager (manages the subtree's units and shifts).
+    /// get it on the seed's root unit) and Manager (manages the subtree's units and shifts). Both read the org
+    /// (<see cref="OrgPermissions.Read"/>); the connector adds it to every position's grants anyway, for the orgs
+    /// created before it was a default.
     /// </summary>
     public static IReadOnlyList<PositionDefinition> Defaults(Guid orgId, DateTimeOffset now) =>
     [
         Create(orgId, UnitAdminKey, "Unit admin", "مسؤول الوحدة",
-            [OrgPermissions.UnitsManage, OrgPermissions.MembersManage, OrgPermissions.SeedsManage], now),
-        Create(orgId, ManagerKey, "Manager", "مدير", [OrgPermissions.UnitsManage, "shifts.manage"], now)
+            [OrgPermissions.Read, OrgPermissions.UnitsManage, OrgPermissions.MembersManage, OrgPermissions.SeedsManage], now),
+        Create(orgId, ManagerKey, "Manager", "مدير", [OrgPermissions.Read, OrgPermissions.UnitsManage, "shifts.manage"], now)
     ];
 
     private void Set(string? nameEn, string? nameAr, IEnumerable<string>? permissions)

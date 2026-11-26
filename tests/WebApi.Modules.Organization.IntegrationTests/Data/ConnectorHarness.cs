@@ -49,10 +49,10 @@ public sealed class ReplicaDatabase : IDisposable
     public ReplicaDbContext NewContext() => new(_options, new FixedTenant(Tenant));
 
     /// <summary>One sync, in a new context, as the connector's runner would run it.</summary>
-    public async Task<SyncOutcome> SyncAsync(ReplicaBinding binding, CancellationToken ct)
+    public async Task<SyncOutcome> SyncAsync(ReplicaBinding binding, CancellationToken ct, bool rewriteGrants = false)
     {
         await using var context = NewContext();
-        return await NewSync(context).SyncAsync(binding, ct);
+        return await NewSync(context).SyncAsync(binding, ct, rewriteGrants);
     }
 
     public ReplicaSync NewSync(ReplicaDbContext context)

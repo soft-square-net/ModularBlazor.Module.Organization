@@ -51,8 +51,9 @@ tenant permissions:
 - **Platform admins** (role `platform-admin`) create orgs and may do everything.
 - **Org admins** (the org's admin list, by issuer and subject) manage their whole org.
 - **Positions**: a membership in a unit with a position gives the position's permissions on that unit and every unit
-  below it. The seeded positions are `unit-admin` (`org.units.manage`, `org.members.manage`, `org.seeds.manage`) and
-  `manager` (`org.units.manage`, `shifts.manage`). Any member may read their org (`org.read`).
+  below it. The seeded positions are `unit-admin` (`org.read`, `org.units.manage`, `org.members.manage`,
+  `org.seeds.manage`) and `manager` (`org.read`, `org.units.manage`, `shifts.manage`). Any member may read their org
+  (`org.read`); in a connector tenant every position grant includes it, whatever the position lists.
 - **Service clients** (`Organization:ServiceClients`, by `sub`, `client_id` or `azp`) read deployment seeds and the
   event feed, and report seed status.
 
@@ -87,8 +88,9 @@ Every write takes the item's `version` and answers 409 if it changed since. Othe
   (`OrgLiveTopic` in Contracts), with the payload `{ type, id }` (the changed item, or `{ "type": "org", "id": orgId }`
   for several) and no sequence. It is sent in the tenant of the request that made the change (none outside a
   tenant); each deployment's connector sends it again in its tenants once it applies the change. The Units page
-  reloads on it. Subscribers need `org.read` on `org:{orgId:N}` or on the org's root unit; no position gives it, so
-  in a connector tenant it has to be granted by hand for now ([Troubleshooting](docs/en/troubleshooting.md)).
+  reloads on it. Subscribers need `org.read` on `org:{orgId:N}` or on the org's root unit; in a connector tenant
+  also on the tenant's seed root unit or one of its ancestors, so the members with a position there can subscribe
+  ([Troubleshooting](docs/en/troubleshooting.md)).
 
 ## The connector
 
@@ -170,7 +172,7 @@ up in review:
 ## Releasing
 
 One release is one version for everything: the server manifest, the two client parts and the two packages. It is set
-once, in `Directory.Build.props` (`VersionPrefix` and `VersionSuffix`, now `1.0.0` and `preview.1`), and the release tag
+once, in `Directory.Build.props` (`VersionPrefix` and `VersionSuffix`, now `1.0.0` and `preview.2`), and the release tag
 is `v` plus that version.
 
 **The bundle.** `scripts/Pack-Bundle.ps1` builds and packs `artifacts/bundle/organization-<version>.zip`, in the layout
@@ -266,15 +268,15 @@ It signs in as the dev accounts and, on the central service, creates the org `pl
 department and a Section with two categories, adds the manager as the Section's `manager`, and creates the seed
 `newsdesk` for deployment `branch` rooted at the department, with the manager as its admin. It waits until B reports
 `Provisioned`, checks B's replica (the tenant's units, their ancestors, the categories) and the grants (the manager's
-position, the seed admin's `unit-admin` and the host's `access.grants.manage`), then renames the Section on the central
-service and waits until B's replica has the new name. Every step is idempotent; it exits with 1 when a check fails.
+position, the seed admin's `unit-admin` with `org.read` on the department, and the host's `access.grants.manage`), and
+subscribes to the org's live topic on B's hub as the manager. Then it renames the Section on the central service and
+waits until B's replica has the new name and the hub has nudged the manager. Every step is idempotent; it exits with 1 when a check fails.
 
-Then sign in on http://localhost:5070 as `admin@modular.local` (tenant `newsdesk`; password in the platform's
-`WebApi.Identity.Server/appsettings.Development.json`), open **Organization** > Playground News, and run the script
-again: the tree shows the new name within a few seconds, without Refresh. Two playground-only workarounds make this
-work, both explained in [Troubleshooting](docs/en/troubleshooting.md): the central deployment has a stub tenant
-`newsdesk` (`Playground:CentralKnowsBranchTenants`), and the script grants the admin `org.read` on the org's root unit
-in the tenant.
+Then sign in on http://localhost:5070 as `manager@modular.local` (`Dev-Manager-2026!`, tenant `newsdesk`), open
+**Organization** > Playground News, and run the script again: the tree shows **Live** and the new name within a few
+seconds, without Refresh. One playground-only workaround makes this work, explained in
+[Troubleshooting](docs/en/troubleshooting.md): the central deployment has a stub tenant `newsdesk`
+(`Playground:CentralKnowsBranchTenants`).
 
 Data stays in the Docker volumes `organization-playground-central` and `organization-playground-branch` and in
 `playground/.data`; delete them to start over.

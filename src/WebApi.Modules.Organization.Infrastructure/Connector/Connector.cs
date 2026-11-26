@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -101,10 +102,13 @@ public sealed class TenantDatabaseSyncLock(TenantDatabases databases) : IReplica
 
 /// <summary>
 /// Runs one tenant's sync in a tenant scope of the module's container, under <see cref="IReplicaSyncLock"/>, and keeps
-/// the error on the replica when it fails.
+/// the error on the replica when it fails. The first successful sync of each tenant after the module starts writes all
+/// of its grants again (idempotent), so grant rules that changed in an upgrade reach the tenants without a migration.
 /// </summary>
 public sealed class ReplicaSyncRunner(IServiceProvider services, IReplicaSyncLock locks, ILogger<ReplicaSyncRunner> log)
 {
+    private readonly ConcurrentDictionary<string, bool> _grantsRewritten = new(StringComparer.OrdinalIgnoreCase);
+
     public async Task<SyncOutcome?> SyncAsync(TenantInfo tenant, DeploymentSeedDto seed, CancellationToken ct)
     {
         await using var scope = services.CreateTenantScope(tenant);
@@ -113,7 +117,8 @@ public sealed class ReplicaSyncRunner(IServiceProvider services, IReplicaSyncLoc
         {
             await using (await locks.AcquireAsync(tenant, ct))
             {
-                var outcome = await sync.SyncAsync(ReplicaBinding.Of(seed), ct);
+                var outcome = await sync.SyncAsync(ReplicaBinding.Of(seed), ct, rewriteGrants: !_grantsRewritten.ContainsKey(tenant.Id));
+                _grantsRewritten[tenant.Id] = true;
                 if (outcome.Applied > 0)
                     log.LogInformation("Synced the Organization replica of tenant {Tenant}: {Applied} entries, {Published} events.", tenant.Id, outcome.Applied, outcome.Published);
                 return outcome;
@@ -303,12 +308,20 @@ public sealed class UnitLiveScopes(IUnitDirectory directory, ReplicaDbContext db
         return await directory.GetAsync(unitId, ct) is { } unit ? UnitScopes.For(unit.Path) : [];
     }
 
+    /// <summary>
+    /// The org topic of the org this tenant's replica follows: the org's root unit, and the tenant's own root unit (its
+    /// seed's) with every unit above it, so <c>org.read</c> on the tenant's root, as its seed admins and members of
+    /// that unit hold, is enough. A grant only on a unit below the tenant's root does not count. Any other org: none.
+    /// </summary>
     private async Task<IReadOnlyList<string>> OrgScopesAsync(string key, CancellationToken ct)
     {
         if (!Guid.TryParseExact(key, "N", out var orgId)) return [];
         if (await db.Sync.AsNoTracking().FirstOrDefaultAsync(ct) is not { } state || state.OrgId != orgId) return [];
         var root = await db.Units.AsNoTracking().Where(u => u.OrgId == orgId && u.ParentId == null).Select(u => (Guid?)u.Id).FirstOrDefaultAsync(ct);
-        return root is { } id ? [UnitScopes.Of(id)] : [];
+        var tenantRoot = await db.Units.AsNoTracking().Where(u => u.Id == state.RootUnitId).Select(u => u.Path).FirstOrDefaultAsync(ct);
+        IEnumerable<string> scopes = root is { } id ? [UnitScopes.Of(id)] : [];
+        if (tenantRoot is not null) scopes = scopes.Concat(UnitScopes.For(tenantRoot));
+        return [.. scopes.Distinct(StringComparer.Ordinal)];
     }
 }
 

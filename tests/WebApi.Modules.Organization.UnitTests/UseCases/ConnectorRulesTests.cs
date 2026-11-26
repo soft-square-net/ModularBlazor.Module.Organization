@@ -88,16 +88,29 @@ public sealed class OrgGrantsTests
 
         grants.Select(g => (g.UserId, g.Permission, g.Scope, g.ValidFrom, g.ValidTo)).ShouldBe(
         [
+            ("bob", "org.read", UnitScopes.Of(Unit), Now.AddDays(-1), Now.AddDays(30)),
             ("bob", "shifts.manage", UnitScopes.Of(Unit), Now.AddDays(-1), Now.AddDays(30)),
             ("bob", "org.units.manage", UnitScopes.Of(Unit), Now.AddDays(-1), Now.AddDays(30))
         ]);
     }
 
     [Fact]
+    public void EveryPositionGivesOrgReadOnItsUnitButAMembershipWithoutPermissionsGivesNothing()
+    {
+        var grants = OrgGrants.For(Unit,
+        [
+            new("carol", ["org.read", "shifts.manage"], Now, null),
+            new("dave", [], Now, null)
+        ], Now);
+
+        grants.Select(g => (g.UserId, g.Permission)).ShouldBe([("carol", "org.read"), ("carol", "shifts.manage")]);
+    }
+
+    [Fact]
     public void PlatformPermissionsOtherThanGrantsManageAreLeftOut()
     {
         var grants = OrgGrants.For(Unit, [new("alice", [PlatformPermissions.ModulesManage, PlatformPermissions.GrantsManage], Now, null)], Now);
-        grants.Select(g => g.Permission).ShouldBe([PlatformPermissions.GrantsManage]);
+        grants.Select(g => g.Permission).ShouldBe(["org.read", PlatformPermissions.GrantsManage]);
     }
 
     [Fact]

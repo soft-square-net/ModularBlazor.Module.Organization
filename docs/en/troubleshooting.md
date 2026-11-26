@@ -26,29 +26,33 @@ Modules__Settings__tenancy__Tenancy__Seed__<n>__DatabaseName = tenant-newsdesk-s
 The playground does this (`Playground:CentralKnowsBranchTenants`, on by default). A platform change that accepts such
 tokens on tenant-optional routes is the real fix.
 
-### The org page never shows "Live"
+### The org page does not show "Live" for a user
 
-**Symptom.** The Units page has no **Live** chip and changes made elsewhere show only after **Refresh**. With
-`Logging:LogLevel:soft.square.net.WebApi.Live=Debug`, the hub logs
+**Symptom.** The Units page has no **Live** chip for some users, and changes made elsewhere show only after
+**Refresh**. With `Logging:LogLevel:soft.square.net.WebApi.Live=Debug`, the hub logs
 `Live subscription of … to organization:org:… refused: forbidden`.
 
-**Cause.** The org topic `organization:org:{orgId:N}` needs `org.read` on `org:{orgId:N}` or on the org's **root**
-unit, in the subscriber's tenant. No position gives `org.read`; a tenant whose seed is rooted below the org root gets
-grants only on its own units; and platform roles hold platform permissions only. So by default nobody in a connector
-tenant holds it.
+**Cause.** The org topic `organization:org:{orgId:N}` needs `org.read` on one of its scopes. In a connector tenant
+they are `org:{orgId:N}`, the org's root unit, and the tenant's seed root unit with its ancestors. Every position
+gives `org.read` on its unit, so the members with a position on the seed root (the seed's admins, for one) can
+subscribe. These users can't:
+- a user whose memberships all sit **below** the seed root, for example a Section's manager in a tenant rooted at the
+  department. A grant covers its unit and the units below it, not the units above it;
+- a user with no position in the org, for example a platform admin who is not a member;
+- anyone, while the connector still runs a version older than 1.0.0-preview.2. Those versions wrote no `org.read`
+  into the position grants. A newer connector rewrites every tenant's grants once on its first sync after a start.
 
-**Workaround.** A tenant admin (the seed's admins hold `access.grants.manage`) grants `org.read` on the root unit to the
-users who keep the org page open:
+**Fix.** Give the user a membership with a position on the seed root or above it. Or a tenant admin (the seed's
+admins hold `access.grants.manage`) grants `org.read` on the seed root by hand:
 
 ```http
 POST /api/identity/grants
 X-Tenant: newsdesk
 
-{ "userId": "<subject>", "permission": "org.read", "scope": "unit:<rootUnitId:N>" }
+{ "userId": "<subject>", "permission": "org.read", "scope": "unit:<seedRootUnitId:N>" }
 ```
 
-The playground's demo script does this for the platform admin. Unit topics (`unit:{id}`) are not affected: a grant on
-the unit or any ancestor counts.
+Unit topics (`unit:{id}`) are not affected: a grant on the unit or any ancestor counts.
 
 ## Seeds
 
