@@ -1,0 +1,273 @@
+@page "/organization/seeds"
+@inherits OrgPageBase
+
+@*
+  The org's tenant seeds (GET/POST/PUT .../seeds): a tenant a deployment should have, owned by a unit. The database
+  placement is a request; the deployment's host reconciles the seed and reports back (provisioned, adjusted to another
+  placement, rejected, failed), and each report is in the seed's status history. Editing a seed makes a new version,
+  which the host reconciles again. Creating one is for customer admins; editing needs org.seeds.manage on its unit.
+*@
+
+<PageHeader Title="@L["Tenant seeds"]" />
+
+<div class="mud-container og-page">
+  <OrgBar Orgs="Orgs" Org="Org" Current="seeds" />
+
+  @if (Error is not null)
+  {
+    <p class="mud-typography mud-typography-body2 og-error" role="alert">@Error</p>
+  }
+
+  @if (Org is null)
+  {
+    <p class="mud-typography mud-typography-body2 og-muted">@(Orgs is null ? L["Loading…"] : L["Choose an organization."])</p>
+  }
+  else
+  {
+    <header class="og-header">
+      <p class="mud-typography mud-typography-body1 og-muted">
+        @L["Each seed asks a deployment for a tenant. The deployment's host reports what it did; the latest report and the history are shown here."]
+      </p>
+      <div class="og-actions">
+        <button type="button" class="mud-button-root mud-button-outlined mud-button-primary mud-button-medium" @onclick="ReloadAsync" disabled="@Busy">@L["Refresh"]</button>
+        @if (Rights.Administers)
+        {
+          <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-medium" @onclick="() => Open(null)" disabled="@Busy">@L["New seed"]</button>
+        }
+      </div>
+    </header>
+
+    @if (_seeds.Count == 0)
+    {
+      <p class="mud-typography mud-typography-body2 og-muted">@L["No tenant seeds yet."]</p>
+    }
+    @foreach (var seed in _seeds)
+    {
+      var unit = _tree?.Find(seed.RootUnitId)?.Unit;
+      <article class="mud-paper mud-elevation-1 og-card" @key="seed.Id">
+        <header class="og-card__head">
+          <h2 class="mud-typography mud-typography-h6">@seed.Name <span class="og-muted mud-typography-caption" dir="ltr">@seed.Id</span></h2>
+          <div class="og-actions">
+            <Chip Tone="@SeedView.Tone(seed.Status)" Hint="@seed.Reason">@L[SeedView.Text(seed.Status)]</Chip>
+            @if (SeedView.Pending(seed))
+            {
+              <Chip Tone="warning" Hint="@L["The host has not reported on this version yet."]">@L["Waiting for version {0}", seed.Version]</Chip>
+            }
+          </div>
+        </header>
+        <dl class="og-dl mud-typography-body2">
+          <dt>@L["Unit"]</dt><dd>@(unit is null ? seed.RootUnitId.ToString("N")[..8] : Name(unit.NameEn, unit.NameAr))</dd>
+          <dt>@L["Deployment"]</dt><dd dir="ltr">@seed.DeploymentId</dd>
+          <dt>@L["Tenant id"]</dt><dd dir="ltr">@seed.TenantId</dd>
+          <dt>@L["Hosts"]</dt><dd dir="ltr">@Lists.Join(seed.Hosts)</dd>
+          <dt>@L["Requested placement"]</dt><dd dir="ltr">@seed.DatabaseServer / @seed.DatabaseName</dd>
+          @if (seed.ActualPlacement is not null)
+          {
+            <dt>@L["Actual placement"]</dt>
+            <dd dir="ltr">@SeedView.Placement(seed.ActualPlacement) @if (SeedView.Moved(seed)) { <Chip Tone="warning">@L["adjusted by the host"]</Chip> }</dd>
+          }
+          <dt>@L["Modules"]</dt><dd dir="ltr">@(seed.Modules.Count == 0 ? L["the deployment's defaults"] : Lists.Join(seed.Modules))</dd>
+          <dt>@L["Tenant admins"]</dt><dd>@(seed.AdminPersonIds.Count == 0 ? "—" : string.Join(", ", seed.AdminPersonIds.Select(PersonName)))</dd>
+          <dt>@L["Version"]</dt><dd>@seed.Version @(seed.ReportedVersion is { } rv ? L["(reported: {0})", rv] : L["(no report yet)"])</dd>
+          @if (!string.IsNullOrWhiteSpace(seed.Reason))
+          {
+            <dt>@L["Reason"]</dt><dd>@seed.Reason</dd>
+          }
+        </dl>
+        <details class="og-history">
+          <summary class="mud-typography-subtitle2">@L["Status history ({0})", seed.History.Count]</summary>
+          <ol class="og-timeline">
+            @foreach (var entry in SeedView.History(seed))
+            {
+              <li>
+                <Chip Tone="@SeedView.Tone(entry.Status)">@L[SeedView.Text(entry.Status)]</Chip>
+                <span class="mud-typography-body2">@When(entry.At) · @L["version {0}", entry.Version]</span>
+                @if (entry.ActualPlacement is not null)
+                {
+                  <span class="mud-typography-caption og-muted" dir="ltr">@SeedView.Placement(entry.ActualPlacement)</span>
+                }
+                @if (!string.IsNullOrWhiteSpace(entry.Reason))
+                {
+                  <span class="mud-typography-caption">@entry.Reason</span>
+                }
+              </li>
+            }
+          </ol>
+        </details>
+        @if (unit is not null && Rights.Can(OrgPermissionNames.SeedsManage, unit.Path))
+        {
+          <div class="og-row-actions">
+            <button type="button" class="mud-button-root mud-button-text mud-button-primary mud-button-small" @onclick="() => Open(seed)">@L["Edit"]</button>
+          </div>
+        }
+      </article>
+    }
+  }
+</div>
+
+<Modal Open="_form is not null" Title="@(_form?.Id is null ? L["New seed"] : L["Edit {0}", _form.Name])" MaxWidth="720px" OnClose="() => _form = null">
+  <ChildContent>
+    @if (_form is { } f)
+    {
+      <div class="og-grid">
+        <div class="mud-input-control">
+          <label class="mud-input-label" for="og-s-unit">@L["Unit"]<span class="mud-required"> *</span></label>
+          <div class="mud-input-wrapper mud-input-wrapper--select">
+            <select id="og-s-unit" class="mud-input-slot" @bind="f.RootUnitId" disabled="@(f.Id is not null)">
+              <option value="">@L["Choose…"]</option>
+              @foreach (var node in _tree?.All() ?? [])
+              {
+                <option value="@node.Unit.Id" disabled="@(node.Unit.TenantBinding.Kind == TenantBindingKind.OwnTenant && f.Id is null)">@(new string(' ', node.Level * 2))@Name(node.Unit.NameEn, node.Unit.NameAr)</option>
+              }
+            </select>
+          </div>
+          <div class="mud-input-helper-text">@L["The unit that owns the tenant; the units below it live in it unless they own one."]</div>
+        </div>
+        <div class="mud-input-control">
+          <label class="mud-input-label" for="og-s-dep">@L["Deployment"]<span class="mud-required"> *</span></label>
+          <div class="mud-input-wrapper"><input id="og-s-dep" class="mud-input-slot" dir="ltr" @bind="f.DeploymentId" disabled="@(f.Id is not null)" placeholder="eu-1" /></div>
+          <div class="mud-input-helper-text">@L["The deployment's Platform:DeploymentId."]</div>
+        </div>
+        <div class="mud-input-control">
+          <label class="mud-input-label" for="og-s-tenant">@L["Tenant id"]<span class="mud-required"> *</span></label>
+          <div class="mud-input-wrapper"><input id="og-s-tenant" class="mud-input-slot" dir="ltr" @bind="f.TenantId" disabled="@(f.Id is not null)" placeholder="acme-news" /></div>
+        </div>
+        <div class="mud-input-control">
+          <label class="mud-input-label" for="og-s-name">@L["Tenant name"]<span class="mud-required"> *</span></label>
+          <div class="mud-input-wrapper"><input id="og-s-name" class="mud-input-slot" dir="auto" @bind="f.Name" /></div>
+        </div>
+        <div class="mud-input-control og-wide">
+          <label class="mud-input-label" for="og-s-hosts">@L["Hosts"]<span class="mud-required"> *</span></label>
+          <div class="mud-input-wrapper"><input id="og-s-hosts" class="mud-input-slot" dir="ltr" @bind="f.Hosts" placeholder="news.acme.example, acme.localhost" /></div>
+          <div class="mud-input-helper-text">@L["Separated by commas."]</div>
+        </div>
+        <div class="mud-input-control">
+          <label class="mud-input-label" for="og-s-server">@L["Database server"]<span class="mud-required"> *</span></label>
+          <div class="mud-input-wrapper"><input id="og-s-server" class="mud-input-slot" dir="ltr" @bind="f.DatabaseServer" placeholder="tenant-data" /></div>
+        </div>
+        <div class="mud-input-control">
+          <label class="mud-input-label" for="og-s-db">@L["Database name"]<span class="mud-required"> *</span></label>
+          <div class="mud-input-wrapper"><input id="og-s-db" class="mud-input-slot" dir="ltr" @bind="f.DatabaseName" placeholder="acme_news" /></div>
+          <div class="mud-input-helper-text">@L["A request: the host may place the tenant elsewhere and says so."]</div>
+        </div>
+        <div class="mud-input-control og-wide">
+          <label class="mud-input-label" for="og-s-mods">@L["Modules"]</label>
+          <div class="mud-input-wrapper"><input id="og-s-mods" class="mud-input-slot" dir="ltr" @bind="f.Modules" placeholder="content, shifts" /></div>
+          <div class="mud-input-helper-text">@L["Separated by commas. Empty: the deployment's defaults."]</div>
+        </div>
+      </div>
+      <fieldset class="og-fieldset">
+        <legend class="mud-input-label">@L["Tenant admins"]</legend>
+        <p class="mud-input-helper-text">@L["They become unit admins of the seed's unit, and the host grants them access.grants.manage in the tenant."]</p>
+        <div class="og-check-list">
+          @foreach (var person in _persons.OrderBy(p => p.DisplayName))
+          {
+            <label class="og-check" @key="person.Id">
+              <input type="checkbox" class="mud-checkbox" checked="@f.Admins.Contains(person.Id)" @onchange="() => ToggleAdmin(f, person.Id)" />
+              <span>@person.DisplayName</span>
+            </label>
+          }
+        </div>
+      </fieldset>
+      @if (_formError is not null)
+      {
+        <p class="mud-input-helper-text mud-input-error" role="alert">@_formError</p>
+      }
+    }
+  </ChildContent>
+  <Actions>
+    <button type="button" class="mud-button-root mud-button-text mud-button-surface mud-button-medium" @onclick="() => _form = null">@L["Cancel"]</button>
+    <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-medium" @onclick="SaveAsync" disabled="@Busy">@L["Save"]</button>
+  </Actions>
+</Modal>
+
+@code {
+  private sealed class SeedForm
+  {
+    public string? Id { get; init; }
+    public long Version { get; init; }
+    public Guid? RootUnitId { get; set; }
+    public string DeploymentId { get; set; } = "";
+    public string TenantId { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string Hosts { get; set; } = "";
+    public string DatabaseServer { get; set; } = "";
+    public string DatabaseName { get; set; } = "";
+    public string Modules { get; set; } = "";
+    public HashSet<Guid> Admins { get; set; } = [];
+  }
+
+  protected override string PageKey => "seeds";
+
+  private IReadOnlyList<TenantSeedDto> _seeds = [];
+  private IReadOnlyList<PersonDto> _persons = [];
+  private UnitTree? _tree;
+  private SeedForm? _form;
+  private string? _formError;
+
+  protected override Task LoadOrgAsync(OrgDto org) => ReloadAsync();
+
+  private async Task ReloadAsync()
+  {
+    if (Org is not { } org) return;
+    await RunAsync(async () =>
+    {
+      var seeds = Api.ListSeedsAsync(org.Id);
+      var persons = Api.ListPersonsAsync(org.Id);
+      var units = Api.ListUnitsAsync(org.Id);
+      _seeds = [.. (await seeds).OrderBy(s => s.Name, StringComparer.CurrentCultureIgnoreCase)];
+      _persons = await persons;
+      _tree = UnitTree.Build(await units);
+    }, toast: false);
+    await LoadRightsAsync(org, [.. _tree?.All().Select(n => n.Unit) ?? []], _persons);
+  }
+
+  private string PersonName(Guid id) => _persons.FirstOrDefault(p => p.Id == id)?.DisplayName ?? id.ToString("N")[..8];
+
+  private static void ToggleAdmin(SeedForm f, Guid id)
+  {
+    if (!f.Admins.Remove(id)) f.Admins.Add(id);
+  }
+
+  private void Open(TenantSeedDto? seed)
+  {
+    _formError = null;
+    _form = seed is null
+      ? new SeedForm()
+      : new SeedForm
+      {
+        Id = seed.Id, Version = seed.Version, RootUnitId = seed.RootUnitId, DeploymentId = seed.DeploymentId, TenantId = seed.TenantId,
+        Name = seed.Name, Hosts = Lists.Join(seed.Hosts), DatabaseServer = seed.DatabaseServer, DatabaseName = seed.DatabaseName,
+        Modules = Lists.Join(seed.Modules), Admins = [.. seed.AdminPersonIds],
+      };
+  }
+
+  private async Task SaveAsync()
+  {
+    if (_form is not { } f || Org is not { } org) return;
+    _formError = null;
+    var hosts = Lists.Split(f.Hosts);
+    if (f.RootUnitId is not { } unitId || string.IsNullOrWhiteSpace(f.DeploymentId) || string.IsNullOrWhiteSpace(f.TenantId)
+        || string.IsNullOrWhiteSpace(f.Name) || hosts.Count == 0 || string.IsNullOrWhiteSpace(f.DatabaseServer) || string.IsNullOrWhiteSpace(f.DatabaseName))
+    {
+      _formError = L["Fill in every field marked *."];
+      return;
+    }
+    await RunAsync(async () =>
+    {
+      var saved = f.Id is { } id
+        ? await Api.UpdateSeedAsync(org.Id, id, new UpdateSeedRequest
+          {
+            Version = f.Version, Name = f.Name.Trim(), Hosts = hosts, DatabaseServer = f.DatabaseServer.Trim(), DatabaseName = f.DatabaseName.Trim(),
+            Modules = Lists.Split(f.Modules), AdminPersonIds = [.. f.Admins],
+          })
+        : await Api.CreateSeedAsync(org.Id, new CreateSeedRequest
+          {
+            RootUnitId = unitId, DeploymentId = f.DeploymentId.Trim(), TenantId = f.TenantId.Trim(), Name = f.Name.Trim(), Hosts = hosts,
+            DatabaseServer = f.DatabaseServer.Trim(), DatabaseName = f.DatabaseName.Trim(), Modules = Lists.Split(f.Modules), AdminPersonIds = [.. f.Admins],
+          });
+      await MudTail.ToastAsync(L["Seed {0} saved (version {1}).", saved.Name, saved.Version], "success");
+      _form = null;
+    }, ReloadAsync);
+  }
+}

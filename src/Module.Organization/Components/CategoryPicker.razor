@@ -1,0 +1,160 @@
+@using soft.square.net.ModularBlazor.Abstractions.Lookups
+@inject IStringLocalizerFactory Texts
+@inject IHttpClientFactory HttpClients
+@inject IServiceProvider Services
+
+@*
+  A Section's post categories, picked from the Content module (no reference to it): its lookup "content.categories"
+  when the lookup catalog has one, else GET api/content/categories through the gateway, in the user's current tenant.
+  At least one is needed (the editor checks it). Saved ids that Content does not list (any more) stay as chips marked
+  unknown, so nothing is dropped silently; when Content cannot be reached, ids can be typed instead.
+*@
+
+<div class="og-categories" role="group" aria-labelledby="@_id">
+  <div class="og-categories__head">
+    <span id="@_id" class="mud-input-label">@L["Post categories"]<span class="mud-required" aria-hidden="true"> *</span></span>
+    <span class="mud-typography mud-typography-body2 og-muted">@L["{0} selected", Selected.Count]</span>
+  </div>
+
+  @if (Selected.Count > 0)
+  {
+    <div class="mud-lookup-picker__chips" aria-label="@L["Selected categories"]">
+      @foreach (var id in Selected)
+      {
+        var known = _all?.FirstOrDefault(c => c.Id == id);
+        <span class="mud-lookup-chip mud-lookup-chip--selected @(known is null && _all is not null ? "og-chip--unknown" : "")"
+              title="@(known is null && _all is not null ? L["Content does not list this category."] : id)">
+          @(known?.Name ?? id)
+          <button type="button" aria-label="@L["Remove {0}", known?.Name ?? id]" @onclick="() => ToggleAsync(id)">✕</button>
+        </span>
+      }
+    </div>
+  }
+
+  @if (_loading)
+  {
+    <p class="mud-typography mud-typography-body2 og-muted">@L["Loading the categories…"]</p>
+  }
+  else if (_error is not null)
+  {
+    <p class="mud-input-helper-text mud-input-error" role="alert">@_error</p>
+    <div class="og-inline-add">
+      <div class="mud-input-wrapper mud-input-wrapper--dense">
+        <input class="mud-input-slot" aria-label="@L["Category id"]" placeholder="@L["Category id"]" @bind="_typed" @onkeydown="AddOnEnter" />
+      </div>
+      <button type="button" class="mud-button-root mud-button-outlined mud-button-primary mud-button-small" @onclick="AddTypedAsync">@L["Add"]</button>
+      <button type="button" class="mud-button-root mud-button-text mud-button-primary mud-button-small" @onclick="LoadAsync">@L["Try again"]</button>
+    </div>
+  }
+  else if (_all is { Count: 0 })
+  {
+    <p class="mud-input-helper-text">@L["Content has no categories in this tenant yet. Add a press and its categories in Content first."]</p>
+  }
+  else if (_all is not null)
+  {
+    <div class="mud-input-wrapper mud-input-wrapper--dense">
+      <input class="mud-input-slot" type="search" aria-label="@L["Search categories"]" placeholder="@L["Search categories…"]" @bind="_q" @bind:event="oninput" />
+    </div>
+    <div class="og-categories__list" role="listbox" aria-multiselectable="true">
+      @foreach (var press in Filtered().GroupBy(c => c.PressId ?? ""))
+      {
+        @if (!string.IsNullOrEmpty(press.Key))
+        {
+          <div class="og-categories__press mud-typography-caption">@press.Key</div>
+        }
+        @foreach (var category in press)
+        {
+          var chosen = Selected.Contains(category.Id);
+          <label class="mud-lookup-picker__row @(chosen ? "selected" : "")" @key="category.Id">
+            <input type="checkbox" class="mud-checkbox" checked="@chosen" @onchange="() => ToggleAsync(category.Id)" />
+            <span class="mud-lookup-picker__text">@category.Name</span>
+            <span class="mud-lookup-picker__cell og-muted" dir="ltr">@category.Id</span>
+          </label>
+        }
+      }
+    </div>
+  }
+  @if (Invalid)
+  {
+    <p class="mud-input-helper-text mud-input-error" role="alert">@L["A section needs at least one post category."]</p>
+  }
+</div>
+
+@code {
+  [Parameter] public IReadOnlyList<string> Selected { get; set; } = [];
+  [Parameter] public EventCallback<List<string>> SelectedChanged { get; set; }
+
+  /// <summary>Show the "at least one" message (after a save was tried).</summary>
+  [Parameter] public bool ShowRequired { get; set; }
+
+  private readonly string _id = "og-cat-" + Guid.NewGuid().ToString("n");
+  private IReadOnlyList<ContentCategory>? _all;
+  private bool _loading;
+  private string? _error;
+  private string _q = "";
+  private string _typed = "";
+  private IStringLocalizer? _l;
+  private IStringLocalizer L => _l ??= Texts.Create(typeof(OrganizationPageBase));
+
+  private bool Invalid => ShowRequired && Selected.Count == 0;
+
+  protected override Task OnInitializedAsync() => LoadAsync();
+
+  private async Task LoadAsync()
+  {
+    _loading = true;
+    _error = null;
+    try
+    {
+      _all = await FromLookupAsync() ?? await FromRestAsync();
+    }
+    catch (AccessTokenNotAvailableException ex) { ex.Redirect(); }
+    catch (Exception e) when (e is HttpRequestException or InvalidOperationException or System.Text.Json.JsonException or TaskCanceledException)
+    {
+      _all = null;
+      _error = L["The Content categories could not be read ({0}). Type category ids instead, or try again.", e.Message];
+    }
+    finally { _loading = false; }
+  }
+
+  /// <summary>The lookup, when the host offers lookups and Content declares this one; null otherwise.</summary>
+  private async Task<IReadOnlyList<ContentCategory>?> FromLookupAsync()
+  {
+    if (Services.GetService(typeof(ILookupService)) is not ILookupService lookups) return null;
+    if (await lookups.FindAsync(ContentCategories.Lookup) is null) return null;
+    var items = new List<ContentCategory>();
+    for (var skip = 0; skip < 2000; skip += 200)
+    {
+      var page = await lookups.SearchAsync(ContentCategories.Lookup, new LookupQuery { Skip = skip, Take = 200 });
+      items.AddRange(page.Items.Select(i => new ContentCategory(i.Key, i.Text, i.ParentKey ?? i.Extra?.GetValueOrDefault("pressId"))));
+      if (!page.HasMore) break;
+    }
+    return ContentCategories.Sort(items);
+  }
+
+  private async Task<IReadOnlyList<ContentCategory>> FromRestAsync()
+  {
+    using var response = await HttpClients.CreateClient(HttpClientNames.WebApi).GetAsync(ContentCategories.Url);
+    if (!response.IsSuccessStatusCode)
+      throw new HttpRequestException($"{(int)response.StatusCode} {response.ReasonPhrase}");
+    return ContentCategories.Parse(await response.Content.ReadAsStringAsync());
+  }
+
+  private IEnumerable<ContentCategory> Filtered() =>
+    string.IsNullOrWhiteSpace(_q)
+      ? _all ?? []
+      : (_all ?? []).Where(c => c.Name.Contains(_q.Trim(), StringComparison.CurrentCultureIgnoreCase)
+                                 || c.Id.Contains(_q.Trim(), StringComparison.OrdinalIgnoreCase)
+                                 || (c.PressId ?? "").Contains(_q.Trim(), StringComparison.OrdinalIgnoreCase));
+
+  private Task ToggleAsync(string id) => SelectedChanged.InvokeAsync(ContentCategories.Toggle(Selected, id));
+
+  private async Task AddTypedAsync()
+  {
+    var id = _typed.Trim();
+    _typed = "";
+    if (id.Length > 0 && !Selected.Contains(id)) await SelectedChanged.InvokeAsync([.. Selected, id]);
+  }
+
+  private Task AddOnEnter(KeyboardEventArgs e) => e.Key == "Enter" ? AddTypedAsync() : Task.CompletedTask;
+}

@@ -2,18 +2,24 @@
   <Sdk Name="soft.square.net.ModularBlazor.Module.Sdk" />
 
   <!--
-    The Blazor client module of Organization, loaded by ModularBlazor.BlzWebClient: the Notes page (list, search, add,
-    edit, delete) over the module's API.
+    The Blazor client module of Organization, loaded by ModularBlazor.BlzWebClient: the admin UI of the central
+    Organization service (orgs, the unit tree explorer and editor with a Section's post categories, people and
+    memberships, positions with permissions from the platform's catalog, tenant seeds with their status history, tenant
+    links and the connection setting), in Arabic and English, with UI.MudTail V2.
 
     Shipped as soft.square.net.Module.Organization.dll alone (the client part of the module). The API client is its own
     hidden client module (WebApi.Modules.Organization.Client, listed in Dependencies): referenced here to compile, never
-    copied (Private=false). The host provides ModularBlazor.Abstractions (the Module SDK), Microsoft.Extensions.Http
-    and the WebAssembly authentication package.
+    copied (Private=false). The host provides ModularBlazor.Abstractions (the Module SDK, with MudTail's components),
+    Microsoft.Extensions.Http, configuration (Organization:BaseUrl), localization and the WebAssembly authentication
+    package. Texts: i18n/{culture}.json, embedded by the Module SDK; keys are the English texts.
   -->
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.*" PrivateAssets="all" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Authentication" Version="10.0.*" PrivateAssets="all" />
+    <!-- IStringLocalizer and IConfiguration: the host provides them (and reads this module's i18n/{culture}.json). -->
+    <PackageReference Include="Microsoft.Extensions.Localization.Abstractions" Version="10.0.*" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.*" PrivateAssets="all" />
     <ProjectReference Include="..\WebApi.Modules.Organization.Client\WebApi.Modules.Organization.Client.csproj" Private="false" />
   </ItemGroup>
 

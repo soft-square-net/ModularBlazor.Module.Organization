@@ -1,15 +1,86 @@
-/* Module.Organization: layout around MudTail's components. Colours come from the --mud-palette-* tokens of UI.MudTail. */
-.mn-page { padding-block: 8px 32px; }
-.mn-header { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; justify-content: space-between; margin-bottom: 16px; }
-.mn-header h1 { margin: 0 0 4px; }
-.mn-header p { max-width: 72ch; margin: 0; }
-.mn-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
-.mn-inline { margin: 0; min-width: 220px; }
-.mn-muted { color: var(--mud-palette-text-secondary); }
-.mn-error { color: var(--mud-palette-error); }
-.mn-card { padding: 20px; margin-bottom: 16px; border-radius: var(--mud-default-borderradius, 8px); }
-.mn-card h2 { margin: 0 0 12px; }
-.mn-form { display: grid; gap: 4px; }
-.mn-body { min-height: 8em; resize: vertical; font: inherit; }
-.mn-row-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-.mn-pager { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: flex-end; margin-top: 12px; }
+/* Module.Organization: layout around UI.MudTail V2's components. Colours, radii and lines come from MudTail's theme
+   tokens (--mud-palette-*, --mud-default-borderradius) only, and every side is a logical property, so the pages mirror
+   in Arabic (RTL). */
+.og-page { padding-block: 8px 32px; }
+.og-header { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; justify-content: space-between; margin-block-end: 16px; }
+.og-header p { max-inline-size: 72ch; margin: 0; }
+.og-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.og-muted { color: var(--mud-palette-text-secondary); }
+.og-error { color: var(--mud-palette-error); }
+.og-sr { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+.og-card { padding: 20px; margin-block-end: 16px; border-radius: var(--mud-default-borderradius, 8px); }
+.og-card h2 { margin: 0; }
+.og-card__head { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; margin-block-end: 12px; }
+.og-cards { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+.og-cards .og-card { margin: 0; }
+.og-columns { display: grid; gap: 16px; grid-template-columns: minmax(260px, 1fr) minmax(320px, 2fr); align-items: start; }
+@media (max-width: 960px) { .og-columns { grid-template-columns: 1fr; } }
+
+/* The org bar: back to the list, the org switcher, the org's pages. */
+.og-bar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-block-end: 16px; padding-block-end: 12px;
+  border-block-end: 1px solid var(--mud-palette-lines-default); }
+.og-bar__org { min-inline-size: 220px; margin: 0; }
+.og-bar__pages { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
+
+/* Forms. */
+.og-grid { display: grid; gap: 0 16px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.og-wide { grid-column: 1 / -1; }
+.og-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-block-end: 8px; }
+.og-grow { flex: 1 1 200px; margin: 0; }
+.og-row-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-block-start: 12px; }
+.og-check { display: flex; gap: 8px; align-items: center; margin-block: 8px; }
+.og-check-list { display: grid; gap: 0 16px; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+.og-fieldset { border: 1px solid var(--mud-palette-lines-default); border-radius: var(--mud-default-borderradius, 8px); padding: 8px 12px; margin-block: 12px; }
+.og-inline-add { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-block: 8px; }
+.og-inline-add .mud-input-wrapper { flex: 1 1 180px; }
+.og-problems { margin: 8px 0 0; padding-inline-start: 18px; }
+
+/* Lists and tables. */
+.og-dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0 0 8px; }
+.og-dl dt { color: var(--mud-palette-text-secondary); }
+.og-dl dd { margin: 0; overflow-wrap: anywhere; }
+.og-table-wrap { overflow-x: auto; }
+.og-table { inline-size: 100%; border-collapse: collapse; }
+.og-table th, .og-table td { text-align: start; padding: 8px 12px; border-block-end: 1px solid var(--mud-palette-lines-default); vertical-align: middle; }
+.og-table th { font-weight: 500; color: var(--mud-palette-text-secondary); white-space: nowrap; }
+.og-cell-actions { white-space: nowrap; text-align: end; }
+.og-list { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; max-block-size: 60vh; overflow-y: auto; }
+.og-list__item { display: flex; gap: 8px; align-items: center; justify-content: space-between; border-radius: var(--mud-default-borderradius, 8px); padding-inline-end: 4px; }
+.og-list__item.is-selected { background: rgba(var(--mud-palette-primary-rgb), 0.12); }
+.og-list__main { display: grid; gap: 2px; flex: 1 1 auto; min-inline-size: 0; padding: 8px 10px; border: 0; background: none; color: inherit; text-align: start; cursor: pointer; font: inherit; }
+.og-list__main:focus-visible { outline: 2px solid var(--mud-palette-primary); outline-offset: -2px; }
+
+/* Chips (status), next to MudTail's lookup chips and tree badges. */
+.og-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 999px; font-size: .75rem; font-weight: 600;
+  border: 1px solid var(--mud-palette-lines-default); color: var(--mud-palette-text-primary); background: var(--mud-palette-surface); white-space: nowrap; }
+.og-chip--success { border-color: var(--mud-palette-success); color: var(--mud-palette-success); }
+.og-chip--warning { border-color: var(--mud-palette-warning); color: var(--mud-palette-warning); }
+.og-chip--error { border-color: var(--mud-palette-error); color: var(--mud-palette-error); }
+.og-chip--info { border-color: var(--mud-palette-info); color: var(--mud-palette-info); }
+.mud-lookup-chip.og-chip--unknown { border: 1px dashed var(--mud-palette-warning); }
+.og-badge--tenant { color: var(--mud-palette-primary); }
+
+/* The explorer: the tree beside the editor. */
+.og-explorer { display: grid; gap: 16px; grid-template-columns: minmax(280px, 2fr) minmax(320px, 3fr); align-items: start; }
+@media (max-width: 960px) { .og-explorer { grid-template-columns: 1fr; } }
+.og-explorer__tree .mud-tree { max-block-size: 70vh; overflow-y: auto; }
+.og-explorer__editor { position: sticky; inset-block-start: 16px; }
+.og-breadcrumbs { display: flex; flex-wrap: wrap; gap: 2px; align-items: center; margin-block-end: 12px; }
+
+/* The category and permission pickers. */
+.og-categories, .og-permissions { display: grid; gap: 8px; margin-block: 12px; }
+.og-categories__head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.og-categories__list { max-block-size: 260px; overflow-y: auto; border: 1px solid var(--mud-palette-lines-default); border-radius: var(--mud-default-borderradius, 8px); padding: 4px; }
+.og-categories__press { padding: 6px 8px 2px; color: var(--mud-palette-text-secondary); text-transform: uppercase; letter-spacing: .04em; }
+.og-permissions__group { border: 1px solid var(--mud-palette-lines-default); border-radius: var(--mud-default-borderradius, 8px); padding: 6px 10px; }
+.og-permissions__group summary { cursor: pointer; padding-block: 4px; }
+
+/* Seeds: the status history. Links: the states. */
+.og-history summary { cursor: pointer; margin-block: 8px; }
+.og-timeline { margin: 0; padding-inline-start: 0; list-style: none; display: grid; gap: 8px; border-inline-start: 2px solid var(--mud-palette-lines-default); }
+.og-timeline li { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding-inline-start: 12px; }
+.og-states { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.og-states li { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+
+.og-modal .mud-dialog { max-inline-size: 95vw; }

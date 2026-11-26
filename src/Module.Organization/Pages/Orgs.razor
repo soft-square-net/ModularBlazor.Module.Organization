@@ -2,48 +2,219 @@
 @inherits OrganizationPageBase
 
 @*
-  A placeholder until the client module (P1-3): the orgs the caller can see (GET /api/organization/orgs), read from the
-  central Organization service. The tree explorer, unit editor, members, positions, seeds and links pages come in P1-3.
+  The orgs the user administers or belongs to (GET /api/organization/orgs; all of them for a platform admin). Platform
+  admins create an org (POST, with its root unit, the default unit types and positions); customer admins rename it and
+  set its admins (PUT .../orgs/{id}, PUT .../orgs/{id}/admins). A row opens the org's unit tree.
 *@
 
-<PageHeader Title="Organization" />
+<PageHeader Title="@L["Organizations"]" />
 
-<div class="mud-container mn-page">
-  <p class="mud-typography mud-typography-body1">
-    The organizations you administer or belong to, from the central Organization service.
-  </p>
+<div class="mud-container og-page">
+  <header class="og-header">
+    <p class="mud-typography mud-typography-body1 og-muted">
+      @L["The organizations you administer or belong to, from the central Organization service. Open one to work on its units, people, positions and tenants."]
+    </p>
+    <div class="og-actions">
+      <button type="button" class="mud-button-root mud-button-outlined mud-button-primary mud-button-medium" @onclick="LoadAsync" disabled="@Busy">@L["Refresh"]</button>
+      @if (Caller.IsPlatformAdmin)
+      {
+        <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-medium" @onclick="OpenCreate" disabled="@Busy">@L["New organization"]</button>
+      }
+    </div>
+  </header>
 
   @if (Error is not null)
   {
-    <p class="mud-typography mud-typography-body2 mn-error" role="alert">@Error</p>
+    <p class="mud-typography mud-typography-body2 og-error" role="alert">@Error</p>
   }
 
-  @if (_orgs is null)
-  {
-    <p class="mud-typography mud-typography-body2">Loading...</p>
-  }
-  else if (_orgs.Count == 0)
-  {
-    <p class="mud-typography mud-typography-body2">No organizations yet.</p>
-  }
-  else
-  {
-    <div class="mud-paper mud-elevation-2 mn-card">
-      <table class="mud-table">
-        <thead><tr><th>Key</th><th>Name</th><th>Arabic name</th></tr></thead>
-        <tbody>
-          @foreach (var org in _orgs)
-          {
-            <tr><td>@org.Key</td><td>@org.NameEn</td><td dir="rtl">@org.NameAr</td></tr>
-          }
-        </tbody>
-      </table>
-    </div>
-  }
+  <section class="mud-paper mud-elevation-1 og-card">
+    <MudTailDataTable @ref="_table" Columns="Columns" Actions="Actions" OnAction="OnActionAsync" OnRowClick="Open"
+                      EmptyText="@L["No organizations yet."]" />
+  </section>
 </div>
 
-@code {
-    private IReadOnlyList<OrgDto>? _orgs;
+<Modal Open="_form is not null" Title="@(_form?.Id is null ? L["New organization"] : L["Edit {0}", _form.NameEn])" OnClose="() => _form = null">
+  <ChildContent>
+    @if (_form is not null)
+    {
+      <div class="og-grid">
+        <div class="mud-input-control">
+          <label class="mud-input-label" for="og-org-key">@L["Key"]<span class="mud-required"> *</span></label>
+          <div class="mud-input-wrapper">
+            <input id="og-org-key" class="mud-input-slot" dir="ltr" @bind="_form.Key" disabled="@(_form.Id is not null)" maxlength="64" placeholder="acme" />
+          </div>
+          <div class="mud-input-helper-text">@L["Lower case letters, digits and dashes. It cannot change."]</div>
+        </div>
+        <div class="mud-input-control">
+          <label class="mud-input-label" for="og-org-en">@L["English name"]<span class="mud-required"> *</span></label>
+          <div class="mud-input-wrapper"><input id="og-org-en" class="mud-input-slot" dir="ltr" lang="en" @bind="_form.NameEn" maxlength="200" /></div>
+        </div>
+        <div class="mud-input-control">
+          <label class="mud-input-label" for="og-org-ar">@L["Arabic name"]<span class="mud-required"> *</span></label>
+          <div class="mud-input-wrapper"><input id="og-org-ar" class="mud-input-slot" dir="rtl" lang="ar" @bind="_form.NameAr" maxlength="200" /></div>
+        </div>
+      </div>
 
-    protected override Task OnInitializedAsync() => RunAsync(async () => _orgs = await Api.ListOrgsAsync(), toast: false);
+      <h3 class="mud-typography mud-typography-subtitle1">@L["Customer admins"]</h3>
+      <p class="mud-input-helper-text">@L["Identities (token issuer and subject) that may do everything in this organization."]</p>
+      @for (var i = 0; i < _form.Admins.Count; i++)
+      {
+        var index = i;
+        <div class="og-row">
+          <div class="mud-input-wrapper mud-input-wrapper--dense og-grow">
+            <input class="mud-input-slot" dir="ltr" aria-label="@L["Issuer"]" placeholder="@L["Issuer"]" @bind="_form.Admins[index].Issuer" />
+          </div>
+          <div class="mud-input-wrapper mud-input-wrapper--dense og-grow">
+            <input class="mud-input-slot" dir="ltr" aria-label="@L["Subject"]" placeholder="@L["Subject"]" @bind="_form.Admins[index].Subject" />
+          </div>
+          <button type="button" class="mud-button-root mud-button-text mud-button-error mud-button-small" @onclick="() => _form.Admins.RemoveAt(index)">@L["Remove"]</button>
+        </div>
+      }
+      <div class="og-row-actions">
+        <button type="button" class="mud-button-root mud-button-text mud-button-primary mud-button-small" @onclick="() => _form.Admins.Add(new AdminRow { Issuer = Caller.Issuer ?? string.Empty })">@L["Add admin"]</button>
+        @if (Caller.Subject is { } me && !_form.Admins.Any(a => a.Subject == me))
+        {
+          <button type="button" class="mud-button-root mud-button-text mud-button-primary mud-button-small" @onclick="() => _form.Admins.Add(new AdminRow { Issuer = Caller.Issuer ?? string.Empty, Subject = me })">@L["Add me"]</button>
+        }
+      </div>
+      @if (_formError is not null)
+      {
+        <p class="mud-input-helper-text mud-input-error" role="alert">@_formError</p>
+      }
+    }
+  </ChildContent>
+  <Actions>
+    <button type="button" class="mud-button-root mud-button-text mud-button-surface mud-button-medium" @onclick="() => _form = null">@L["Cancel"]</button>
+    <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-medium" @onclick="SaveAsync" disabled="@Busy">@L["Save"]</button>
+  </Actions>
+</Modal>
+
+@code {
+  private sealed class AdminRow
+  {
+    public string Issuer { get; set; } = "";
+    public string Subject { get; set; } = "";
+  }
+
+  private sealed class OrgForm
+  {
+    public Guid? Id { get; init; }
+    public int Version { get; init; }
+    public string Key { get; set; } = "";
+    public string NameEn { get; set; } = "";
+    public string NameAr { get; set; } = "";
+    public List<AdminRow> Admins { get; set; } = [];
+    public IReadOnlyList<OrgAdminDto> Original { get; init; } = [];
+  }
+
+  private MudTailDataTable? _table;
+  private IReadOnlyList<OrgDto> _orgs = [];
+  private OrgForm? _form;
+  private string? _formError;
+
+  private IReadOnlyList<object> Columns =>
+  [
+    new { key = "key", title = L["Key"].Value, width = "160px" },
+    new { key = "name", title = L["Name"].Value },
+    new { key = "other", title = L["Other name"].Value },
+    new { key = "admins", title = L["Admins"].Value, type = "number", width = "110px" },
+    new { key = "created", title = L["Created"].Value, width = "170px" },
+  ];
+
+  private IReadOnlyList<object> Actions =>
+  [
+    new { id = "open", label = L["Open"].Value, icon = "network", color = "primary" },
+    new { id = "change", label = L["Edit"].Value, icon = "pencil", color = "default" },
+  ];
+
+  protected override async Task OnAfterRenderAsync(bool firstRender)
+  {
+    if (firstRender) await LoadAsync();
+  }
+
+  private async Task LoadAsync()
+  {
+    await RunAsync(async () =>
+    {
+      _orgs = await Api.ListOrgsAsync();
+      if (_table is not null) await _table.SetDataAsync(_orgs.Select(ToRow).ToList());
+    }, toast: false);
+  }
+
+  private object ToRow(OrgDto o) => new
+  {
+    id = o.Id.ToString(),
+    key = o.Key,
+    name = Name(o.NameEn, o.NameAr),
+    other = IsRtl ? o.NameEn : o.NameAr,
+    admins = o.Admins.Count,
+    created = When(o.CreatedAt),
+  };
+
+  private void Open(string key)
+  {
+    if (Guid.TryParse(key, out var id)) Nav.NavigateTo(OrgLinks.Href("units", id));
+  }
+
+  private void OpenCreate()
+  {
+    _formError = null;
+    _form = new OrgForm { Admins = Caller.Subject is { } me ? [new AdminRow { Issuer = Caller.Issuer ?? "", Subject = me }] : [] };
+  }
+
+  private Task OnActionAsync((string Action, string Key) e)
+  {
+    var org = _orgs.FirstOrDefault(o => o.Id.ToString() == e.Key);
+    if (org is null) return Task.CompletedTask;
+    if (e.Action == "open") Open(e.Key);
+    else if (e.Action == "change")
+    {
+      _formError = null;
+      _form = new OrgForm
+      {
+        Id = org.Id, Version = org.Version, Key = org.Key, NameEn = org.NameEn, NameAr = org.NameAr, Original = org.Admins,
+        Admins = [.. org.Admins.Select(a => new AdminRow { Issuer = a.Issuer, Subject = a.Subject })],
+      };
+    }
+    return Task.CompletedTask;
+  }
+
+  private async Task SaveAsync()
+  {
+    if (_form is not { } form) return;
+    _formError = null;
+    if (string.IsNullOrWhiteSpace(form.Key) || string.IsNullOrWhiteSpace(form.NameEn) || string.IsNullOrWhiteSpace(form.NameAr))
+    {
+      _formError = L["Enter the key and both names."];
+      return;
+    }
+    var admins = form.Admins.Where(a => !string.IsNullOrWhiteSpace(a.Subject))
+      .Select(a => new OrgAdminDto { Issuer = a.Issuer.Trim(), Subject = a.Subject.Trim() }).ToList();
+    if (admins.Any(a => a.Issuer.Length == 0))
+    {
+      _formError = L["Every admin needs an issuer."];
+      return;
+    }
+
+    await RunAsync(async () =>
+    {
+      if (form.Id is not { } id)
+      {
+        var created = await Api.CreateOrgAsync(new CreateOrgRequest { Key = form.Key.Trim(), NameEn = form.NameEn.Trim(), NameAr = form.NameAr.Trim(), Admins = admins });
+        await MudTail.ToastAsync(L["Organization {0} created.", created.Key], "success");
+      }
+      else
+      {
+        var saved = await Api.UpdateOrgAsync(id, new UpdateOrgRequest { Version = form.Version, NameEn = form.NameEn.Trim(), NameAr = form.NameAr.Trim() });
+        if (!SameAdmins(form.Original, admins))
+          await Api.SetOrgAdminsAsync(id, new SetOrgAdminsRequest { Admins = admins });
+        await MudTail.ToastAsync(L["Organization {0} saved.", saved.Key], "success");
+      }
+      _form = null;
+    }, LoadAsync);
+  }
+
+  private static bool SameAdmins(IReadOnlyList<OrgAdminDto> a, IReadOnlyList<OrgAdminDto> b) =>
+    a.Count == b.Count && a.Zip(b).All(p => p.First.Issuer == p.Second.Issuer && p.First.Subject == p.Second.Subject);
 }

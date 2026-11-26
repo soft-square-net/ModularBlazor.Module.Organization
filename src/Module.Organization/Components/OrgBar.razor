@@ -1,0 +1,54 @@
+@inject NavigationManager Nav
+@inject IStringLocalizerFactory Texts
+@inject soft.square.net.ModularBlazor.Abstractions.Localization.ILocaleService Locale
+
+@*
+  The org switcher and the links between the org's pages, on top of every page about one org. Changing the org keeps
+  the page and puts the new org in the address (?org=).
+*@
+
+<nav class="og-bar" aria-label="@L["Organization pages"]">
+  <a href="organization" class="mud-button-root mud-button-text mud-button-primary mud-button-small">@L["All organizations"]</a>
+  @if (Orgs is { Count: > 0 })
+  {
+    <div class="mud-input-wrapper mud-input-wrapper--select mud-input-wrapper--dense og-bar__org">
+      <select class="mud-input-slot" aria-label="@L["Organization"]" value="@(Org?.Id.ToString() ?? "")" @onchange="Switch">
+        @if (Org is null)
+        {
+          <option value="">@L["Choose an organization…"]</option>
+        }
+        @foreach (var org in Orgs)
+        {
+          <option value="@org.Id">@Names.Pick(org.NameEn, org.NameAr, Locale.Culture) (@org.Key)</option>
+        }
+      </select>
+    </div>
+  }
+  @if (Org is not null)
+  {
+    <ul class="og-bar__pages">
+      @foreach (var (key, title) in OrgLinks.Pages)
+      {
+        var current = key == Current;
+        <li>
+          <a href="@OrgLinks.Href(key, Org.Id)" aria-current="@(current ? "page" : null)"
+             class="mud-button-root mud-button-small @(current ? "mud-button-filled mud-button-primary" : "mud-button-text mud-button-surface")">@L[title]</a>
+        </li>
+      }
+    </ul>
+  }
+</nav>
+
+@code {
+  [Parameter] public IReadOnlyList<OrgDto>? Orgs { get; set; }
+  [Parameter] public OrgDto? Org { get; set; }
+  [Parameter, EditorRequired] public string Current { get; set; } = "";
+
+  private IStringLocalizer? _l;
+  private IStringLocalizer L => _l ??= Texts.Create(typeof(OrganizationPageBase));
+
+  private void Switch(ChangeEventArgs e)
+  {
+    if (Guid.TryParse(e.Value?.ToString(), out var id)) Nav.NavigateTo(OrgLinks.Href(Current, id));
+  }
+}

@@ -10,6 +10,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/WebApi.Modules.Organization.UnitTests/WebApi.Modules.Organization.UnitTests.csproj" />
+    <Project Path="tests/Module.Organization.Tests/Module.Organization.Tests.csproj" />
     <Project Path="tests/WebApi.Modules.Organization.IntegrationTests/WebApi.Modules.Organization.IntegrationTests.csproj" />
   </Folder>
 </Solution>

@@ -1,0 +1,106 @@
+@page "/organization/links"
+@inherits OrgPageBase
+
+@*
+  Links between the org's sibling tenants (GET .../links): the TenantLink skeleton, read-only. A link is Requested,
+  then Active or Declined; an Active one can be Revoked. Changing a link's state, and what a link lets a tenant do,
+  come later; the states and where each may go next are shown so the flow is clear.
+*@
+
+<PageHeader Title="@L["Tenant links"]" />
+
+<div class="mud-container og-page">
+  <OrgBar Orgs="Orgs" Org="Org" Current="links" />
+
+  @if (Error is not null)
+  {
+    <p class="mud-typography mud-typography-body2 og-error" role="alert">@Error</p>
+  }
+
+  @if (Org is null)
+  {
+    <p class="mud-typography mud-typography-body2 og-muted">@(Orgs is null ? L["Loading…"] : L["Choose an organization."])</p>
+  }
+  else
+  {
+    <header class="og-header">
+      <p class="mud-typography mud-typography-body1 og-muted">@L["Links let one tenant of the organization work with another. For now they show their state only."]</p>
+      <div class="og-actions">
+        <button type="button" class="mud-button-root mud-button-outlined mud-button-primary mud-button-medium" @onclick="ReloadAsync" disabled="@Busy">@L["Refresh"]</button>
+      </div>
+    </header>
+
+    <section class="mud-paper mud-elevation-1 og-card" aria-label="@L["States"]">
+      <h2 class="mud-typography mud-typography-h6">@L["States"]</h2>
+      <ol class="og-states">
+        @foreach (var state in LinkView.States)
+        {
+          <li>
+            <Chip Tone="@LinkView.Tone(state)">@L[LinkView.Text(state)]</Chip>
+            <span class="og-muted mud-typography-caption">@L["{0} links", _links.Count(l => l.State == state)]</span>
+            @if (LinkView.Next(state) is { Count: > 0 } next)
+            {
+              <span class="mud-typography-caption">→ @string.Join(" | ", next.Select(n => L[LinkView.Text(n)].Value))</span>
+            }
+            else
+            {
+              <span class="mud-typography-caption og-muted">@L["final"]</span>
+            }
+          </li>
+        }
+      </ol>
+    </section>
+
+    <section class="mud-paper mud-elevation-1 og-card">
+      @if (_links.Count == 0)
+      {
+        <p class="mud-typography mud-typography-body2 og-muted">@L["No tenant links yet."]</p>
+      }
+      else
+      {
+        <div class="og-table-wrap">
+          <table class="og-table">
+            <thead>
+              <tr><th>@L["From"]</th><th>@L["To"]</th><th>@L["State"]</th><th>@L["Requested"]</th><th>@L["Decided"]</th></tr>
+            </thead>
+            <tbody>
+              @foreach (var link in _links)
+              {
+                <tr @key="link.Id">
+                  <td>@UnitName(link.FromUnitId) <span class="og-muted mud-typography-caption" dir="ltr">@link.FromSeedId</span></td>
+                  <td>@UnitName(link.ToUnitId) <span class="og-muted mud-typography-caption" dir="ltr">@link.ToSeedId</span></td>
+                  <td><Chip Tone="@LinkView.Tone(link.State)">@L[LinkView.Text(link.State)]</Chip></td>
+                  <td>@When(link.RequestedAt)</td>
+                  <td>@(link.DecidedAt is null ? "—" : When(link.DecidedAt))</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  }
+</div>
+
+@code {
+  protected override string PageKey => "links";
+
+  private IReadOnlyList<TenantLinkDto> _links = [];
+  private UnitTree? _tree;
+
+  protected override Task LoadOrgAsync(OrgDto org) => ReloadAsync();
+
+  private async Task ReloadAsync()
+  {
+    if (Org is not { } org) return;
+    await RunAsync(async () =>
+    {
+      var links = Api.ListLinksAsync(org.Id);
+      var units = Api.ListUnitsAsync(org.Id);
+      _links = [.. (await links).OrderByDescending(l => l.RequestedAt)];
+      _tree = UnitTree.Build(await units);
+    }, toast: false);
+  }
+
+  private string UnitName(Guid id) => _tree?.Find(id)?.Unit is { } u ? Name(u.NameEn, u.NameAr) : id.ToString("N")[..8];
+}

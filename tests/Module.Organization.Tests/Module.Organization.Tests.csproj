@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Unit tests of the Organization client module's code (Module.Organization): the unit tree's rules, the rights the
+       pages show buttons by, the unit editor's form (a Section's categories), the permission catalog and the Content
+       categories, seeds and links, the Organization:BaseUrl setting, and the translations and RTL-safe styles.
+       No browser, no host. -->
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <!-- What the host provides to client modules: the client SDK and the WebAssembly authentication package. -->
+  <ItemGroup>
+    <PackageReference Include="soft.square.net.ModularBlazor.Abstractions" Version="$(ModularBlazorPlatformVersion)" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Authentication" Version="10.0.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Module.Organization\Module.Organization.csproj" />
+    <ProjectReference Include="..\..\src\WebApi.Modules.Organization.Client\WebApi.Modules.Organization.Client.csproj" />
+  </ItemGroup>
+
+</Project>

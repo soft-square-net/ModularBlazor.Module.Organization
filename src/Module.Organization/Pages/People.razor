@@ -1,0 +1,470 @@
+@page "/organization/people"
+@inherits OrgPageBase
+
+@*
+  The org's people (GET/POST/PUT .../persons): identities (token issuer and subject) with an optional employee
+  profile. Their memberships (GET/POST/PUT/DELETE .../memberships): a person's place in a unit, with a position (whose
+  permissions they then hold on the unit and below), between two dates; one primary membership per person.
+  ?unit={id} shows the members of one unit (from the unit tree).
+*@
+
+<PageHeader Title="@L["People"]" />
+
+<div class="mud-container og-page">
+  <OrgBar Orgs="Orgs" Org="Org" Current="people" />
+
+  @if (Error is not null)
+  {
+    <p class="mud-typography mud-typography-body2 og-error" role="alert">@Error</p>
+  }
+
+  @if (Org is null)
+  {
+    <p class="mud-typography mud-typography-body2 og-muted">@(Orgs is null ? L["Loading…"] : L["Choose an organization."])</p>
+  }
+  else
+  {
+    <div class="og-columns">
+      <section class="mud-paper mud-elevation-1 og-card">
+        <header class="og-card__head">
+          <h2 class="mud-typography mud-typography-h6">@L["People"] <span class="og-muted">(@_persons.Count)</span></h2>
+          <div class="og-actions">
+            @if (Rights.CanSomewhere(OrgPermissionNames.MembersManage))
+            {
+              <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-small" @onclick="() => OpenPerson(null)" disabled="@Busy">@L["Add person"]</button>
+            }
+          </div>
+        </header>
+        <div class="mud-input-wrapper mud-input-wrapper--dense">
+          <input class="mud-input-slot" type="search" aria-label="@L["Search people"]" placeholder="@L["Search people…"]" @bind="_q" @bind:event="oninput" />
+        </div>
+        @if (FilteredPersons.Count == 0)
+        {
+          <p class="mud-typography mud-typography-body2 og-muted">@L["No people yet."]</p>
+        }
+        else
+        {
+          <ul class="og-list" role="listbox" aria-label="@L["People"]">
+            @foreach (var person in FilteredPersons)
+            {
+              var chosen = _personId == person.Id;
+              <li @key="person.Id" class="og-list__item @(chosen ? "is-selected" : "")">
+                <button type="button" class="og-list__main" role="option" aria-selected="@(chosen ? "true" : "false")" @onclick="() => SelectPerson(person.Id)">
+                  <span class="mud-typography-body1">@person.DisplayName</span>
+                  <span class="mud-typography-caption og-muted" dir="ltr">@(person.Email ?? person.Subject)</span>
+                  @if (person.Employee is { } e)
+                  {
+                    <span class="mud-typography-caption og-muted">@L["Employee"] @e.EmployeeNumber @(e.JobTitle is { Length: > 0 } t ? "· " + t : "")</span>
+                  }
+                </button>
+                @if (Rights.CanSomewhere(OrgPermissionNames.MembersManage))
+                {
+                  <button type="button" class="mud-button-root mud-button-text mud-button-primary mud-button-small" @onclick="() => OpenPerson(person)">@L["Edit"]</button>
+                }
+              </li>
+            }
+          </ul>
+        }
+      </section>
+
+      <section class="mud-paper mud-elevation-1 og-card">
+        <header class="og-card__head">
+          <h2 class="mud-typography mud-typography-h6">@MembershipsTitle</h2>
+          <div class="og-actions">
+            <div class="mud-input-wrapper mud-input-wrapper--select mud-input-wrapper--dense">
+              <select class="mud-input-slot" aria-label="@L["Unit"]" value="@(_unitId?.ToString() ?? "")" @onchange="UnitChanged">
+                <option value="">@L["Every unit"]</option>
+                @foreach (var node in _tree?.All() ?? [])
+                {
+                  <option value="@node.Unit.Id">@(new string(' ', node.Level * 2))@Name(node.Unit.NameEn, node.Unit.NameAr)</option>
+                }
+              </select>
+            </div>
+            @if (Rights.CanSomewhere(OrgPermissionNames.MembersManage))
+            {
+              <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-small" @onclick="() => OpenMembership(null)" disabled="@(Busy || _persons.Count == 0)">@L["Add membership"]</button>
+            }
+          </div>
+        </header>
+        @if (VisibleMemberships.Count == 0)
+        {
+          <p class="mud-typography mud-typography-body2 og-muted">@L["No memberships here."]</p>
+        }
+        else
+        {
+          <div class="og-table-wrap">
+            <table class="og-table">
+              <thead>
+                <tr>
+                  <th>@L["Person"]</th><th>@L["Unit"]</th><th>@L["Position"]</th><th>@L["From"]</th><th>@L["Until"]</th><th>@L["State"]</th><th><span class="og-sr">@L["Actions"]</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                @foreach (var m in VisibleMemberships)
+                {
+                  var unit = _tree?.Find(m.UnitId)?.Unit;
+                  var active = m.From <= DateTimeOffset.UtcNow && (m.To is null || m.To > DateTimeOffset.UtcNow);
+                  <tr @key="m.Id">
+                    <td>@PersonName(m.PersonId) @if (m.Primary) { <Chip Tone="info">@L["Primary"]</Chip> }</td>
+                    <td>@(unit is null ? "—" : Name(unit.NameEn, unit.NameAr))</td>
+                    <td>@PositionName(m.PositionId, m.PositionKey)</td>
+                    <td>@Day(m.From)</td>
+                    <td>@(m.To is null ? L["open"] : Day(m.To))</td>
+                    <td><Chip Tone="@(active ? "success" : "warning")">@(active ? L["Active"] : m.From > DateTimeOffset.UtcNow ? L["Starts later"] : L["Ended"])</Chip></td>
+                    <td class="og-cell-actions">
+                      @if (unit is not null && Rights.Can(OrgPermissionNames.MembersManage, unit.Path))
+                      {
+                        <button type="button" class="mud-button-root mud-button-text mud-button-primary mud-button-small" @onclick="() => OpenMembership(m)">@L["Edit"]</button>
+                        @if (active)
+                        {
+                          <button type="button" class="mud-button-root mud-button-text mud-button-warning mud-button-small" @onclick="() => EndAsync(m)" disabled="@Busy">@L["End now"]</button>
+                        }
+                        <button type="button" class="mud-button-root mud-button-text mud-button-error mud-button-small" @onclick="() => _removing = m" disabled="@Busy">@L["Remove"]</button>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+    </div>
+  }
+</div>
+
+<Modal Open="_person is not null" Title="@(_person?.Id is null ? L["Add person"] : L["Edit {0}", _person.DisplayName])" OnClose="() => _person = null">
+  <ChildContent>
+    @if (_person is { } p)
+    {
+      <div class="og-grid">
+        <div class="mud-input-control">
+          <label class="mud-input-label" for="og-p-iss">@L["Issuer"]<span class="mud-required"> *</span></label>
+          <div class="mud-input-wrapper"><input id="og-p-iss" class="mud-input-slot" dir="ltr" @bind="p.Issuer" disabled="@(p.Id is not null)" /></div>
+        </div>
+        <div class="mud-input-control">
+          <label class="mud-input-label" for="og-p-sub">@L["Subject"]<span class="mud-required"> *</span></label>
+          <div class="mud-input-wrapper"><input id="og-p-sub" class="mud-input-slot" dir="ltr" @bind="p.Subject" disabled="@(p.Id is not null)" /></div>
+          <div class="mud-input-helper-text">@L["The user's id in the identity service (the token's sub). It cannot change."]</div>
+        </div>
+        <div class="mud-input-control">
+          <label class="mud-input-label" for="og-p-name">@L["Display name"]<span class="mud-required"> *</span></label>
+          <div class="mud-input-wrapper"><input id="og-p-name" class="mud-input-slot" dir="auto" @bind="p.DisplayName" maxlength="200" /></div>
+        </div>
+        <div class="mud-input-control">
+          <label class="mud-input-label" for="og-p-mail">@L["Email"]</label>
+          <div class="mud-input-wrapper"><input id="og-p-mail" type="email" class="mud-input-slot" dir="ltr" @bind="p.Email" /></div>
+        </div>
+      </div>
+      <label class="og-check">
+        <input type="checkbox" class="mud-checkbox" @bind="p.IsEmployee" />
+        <span>@L["Employee (HR profile)"]</span>
+      </label>
+      @if (p.IsEmployee)
+      {
+        <div class="og-grid">
+          <div class="mud-input-control">
+            <label class="mud-input-label" for="og-p-no">@L["Employee number"]</label>
+            <div class="mud-input-wrapper"><input id="og-p-no" class="mud-input-slot" dir="ltr" @bind="p.EmployeeNumber" /></div>
+          </div>
+          <div class="mud-input-control">
+            <label class="mud-input-label" for="og-p-title">@L["Job title"]</label>
+            <div class="mud-input-wrapper"><input id="og-p-title" class="mud-input-slot" dir="auto" @bind="p.JobTitle" /></div>
+          </div>
+          <div class="mud-input-control">
+            <label class="mud-input-label" for="og-p-hired">@L["Hired on"]</label>
+            <div class="mud-input-wrapper"><input id="og-p-hired" type="date" class="mud-input-slot" @bind="p.HiredOn" /></div>
+          </div>
+        </div>
+      }
+      @if (_formError is not null)
+      {
+        <p class="mud-input-helper-text mud-input-error" role="alert">@_formError</p>
+      }
+    }
+  </ChildContent>
+  <Actions>
+    <button type="button" class="mud-button-root mud-button-text mud-button-surface mud-button-medium" @onclick="() => _person = null">@L["Cancel"]</button>
+    <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-medium" @onclick="SavePersonAsync" disabled="@Busy">@L["Save"]</button>
+  </Actions>
+</Modal>
+
+<Modal Open="_membership is not null" Title="@(_membership?.Id is null ? L["Add membership"] : L["Edit membership"])" OnClose="() => _membership = null">
+  <ChildContent>
+    @if (_membership is { } m)
+    {
+      <div class="og-grid">
+        <div class="mud-input-control">
+          <label class="mud-input-label" for="og-m-person">@L["Person"]<span class="mud-required"> *</span></label>
+          <div class="mud-input-wrapper mud-input-wrapper--select">
+            <select id="og-m-person" class="mud-input-slot" @bind="m.PersonId" disabled="@(m.Id is not null)">
+              <option value="">@L["Choose…"]</option>
+              @foreach (var person in _persons.OrderBy(x => x.DisplayName)) { <option value="@person.Id">@person.DisplayName</option> }
+            </select>
+          </div>
+        </div>
+        <div class="mud-input-control">
+          <label class="mud-input-label" for="og-m-unit">@L["Unit"]<span class="mud-required"> *</span></label>
+          <div class="mud-input-wrapper mud-input-wrapper--select">
+            <select id="og-m-unit" class="mud-input-slot" @bind="m.UnitId" disabled="@(m.Id is not null)">
+              <option value="">@L["Choose…"]</option>
+              @foreach (var node in _tree?.All() ?? [])
+              {
+                <option value="@node.Unit.Id" disabled="@(!Rights.Can(OrgPermissionNames.MembersManage, node.Unit.Path))">@(new string(' ', node.Level * 2))@Name(node.Unit.NameEn, node.Unit.NameAr)</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="mud-input-control">
+          <label class="mud-input-label" for="og-m-pos">@L["Position"]</label>
+          <div class="mud-input-wrapper mud-input-wrapper--select">
+            <select id="og-m-pos" class="mud-input-slot" @bind="m.PositionId">
+              <option value="">@L["None (member only)"]</option>
+              @foreach (var position in _positions) { <option value="@position.Id">@Name(position.NameEn, position.NameAr)</option> }
+            </select>
+          </div>
+          <div class="mud-input-helper-text">@L["The position's permissions apply on this unit and everything below it."]</div>
+        </div>
+        <div class="mud-input-control">
+          <label class="mud-input-label" for="og-m-from">@L["From"]</label>
+          <div class="mud-input-wrapper"><input id="og-m-from" type="date" class="mud-input-slot" @bind="m.From" /></div>
+        </div>
+        <div class="mud-input-control">
+          <label class="mud-input-label" for="og-m-to">@L["Until"]</label>
+          <div class="mud-input-wrapper"><input id="og-m-to" type="date" class="mud-input-slot" @bind="m.To" /></div>
+          <div class="mud-input-helper-text">@L["Empty: open-ended."]</div>
+        </div>
+      </div>
+      <label class="og-check">
+        <input type="checkbox" class="mud-checkbox" @bind="m.Primary" />
+        <span>@L["Primary membership (the person's home unit; one per person)"]</span>
+      </label>
+      @if (_formError is not null)
+      {
+        <p class="mud-input-helper-text mud-input-error" role="alert">@_formError</p>
+      }
+    }
+  </ChildContent>
+  <Actions>
+    <button type="button" class="mud-button-root mud-button-text mud-button-surface mud-button-medium" @onclick="() => _membership = null">@L["Cancel"]</button>
+    <button type="button" class="mud-button-root mud-button-filled mud-button-primary mud-button-medium" @onclick="SaveMembershipAsync" disabled="@Busy">@L["Save"]</button>
+  </Actions>
+</Modal>
+
+<Modal Open="_removing is not null" Title="@L["Remove this membership?"]" OnClose="() => _removing = null">
+  <ChildContent>
+    <p class="mud-typography mud-typography-body2">@L["It is removed for good, with the rights its position gave. To keep the history, end it instead."]</p>
+  </ChildContent>
+  <Actions>
+    <button type="button" class="mud-button-root mud-button-text mud-button-surface mud-button-medium" @onclick="() => _removing = null">@L["Keep it"]</button>
+    <button type="button" class="mud-button-root mud-button-filled mud-button-error mud-button-medium" @onclick="RemoveMembershipAsync" disabled="@Busy">@L["Remove"]</button>
+  </Actions>
+</Modal>
+
+@code {
+  private sealed class PersonForm
+  {
+    public Guid? Id { get; init; }
+    public int Version { get; init; }
+    public string Issuer { get; set; } = "";
+    public string Subject { get; set; } = "";
+    public string DisplayName { get; set; } = "";
+    public string? Email { get; set; }
+    public bool IsEmployee { get; set; }
+    public string? EmployeeNumber { get; set; }
+    public string? JobTitle { get; set; }
+    public DateTime? HiredOn { get; set; }
+  }
+
+  private sealed class MembershipForm
+  {
+    public Guid? Id { get; init; }
+    public Guid? PersonId { get; set; }
+    public Guid? UnitId { get; set; }
+    public Guid? PositionId { get; set; }
+    public DateTime? From { get; set; } = DateTime.Today;
+    public DateTime? To { get; set; }
+    public bool Primary { get; set; }
+  }
+
+  protected override string PageKey => "people";
+
+  [SupplyParameterFromQuery(Name = "unit")] public Guid? UnitQuery { get; set; }
+
+  private IReadOnlyList<PersonDto> _persons = [];
+  private IReadOnlyList<MembershipDto> _memberships = [];
+  private IReadOnlyList<PositionDto> _positions = [];
+  private UnitTree? _tree;
+  private Guid? _personId;
+  private Guid? _unitId;
+  private string _q = "";
+  private PersonForm? _person;
+  private MembershipForm? _membership;
+  private MembershipDto? _removing;
+  private string? _formError;
+
+  private IReadOnlyList<PersonDto> FilteredPersons =>
+    [.. _persons.Where(p => string.IsNullOrWhiteSpace(_q)
+        || p.DisplayName.Contains(_q.Trim(), StringComparison.CurrentCultureIgnoreCase)
+        || (p.Email ?? "").Contains(_q.Trim(), StringComparison.OrdinalIgnoreCase)
+        || p.Subject.Contains(_q.Trim(), StringComparison.OrdinalIgnoreCase)
+        || (p.Employee?.EmployeeNumber ?? "").Contains(_q.Trim(), StringComparison.OrdinalIgnoreCase))
+      .OrderBy(p => p.DisplayName, StringComparer.CurrentCultureIgnoreCase)];
+
+  private IReadOnlyList<MembershipDto> VisibleMemberships =>
+    [.. _memberships.Where(m => (_personId is null || m.PersonId == _personId) && (_unitId is null || m.UnitId == _unitId))
+      .OrderBy(m => PersonName(m.PersonId), StringComparer.CurrentCultureIgnoreCase).ThenByDescending(m => m.From)];
+
+  private string MembershipsTitle =>
+    _personId is { } p ? L["Memberships of {0}", PersonName(p)] : _unitId is { } u ? L["Members of {0}", UnitName(u)] : L["Memberships"];
+
+  protected override async Task LoadOrgAsync(OrgDto org)
+  {
+    _personId = null;
+    _unitId = UnitQuery;
+    await ReloadAsync();
+  }
+
+  private async Task ReloadAsync()
+  {
+    if (Org is not { } org) return;
+    await RunAsync(async () =>
+    {
+      var persons = Api.ListPersonsAsync(org.Id);
+      var memberships = Api.ListMembershipsAsync(org.Id);
+      var positions = Api.ListPositionsAsync(org.Id);
+      var units = Api.ListUnitsAsync(org.Id);
+      var types = Api.ListUnitTypesAsync(org.Id);
+      _persons = await persons;
+      _memberships = await memberships;
+      _positions = await positions;
+      _tree = UnitTree.Build(await units, await types);
+    }, toast: false);
+    await LoadRightsAsync(org, [.. _tree?.All().Select(n => n.Unit) ?? []], _persons, _memberships, _positions);
+  }
+
+  private void SelectPerson(Guid id) => _personId = _personId == id ? null : id;
+
+  private void UnitChanged(ChangeEventArgs e) => _unitId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+
+  private string PersonName(Guid id) => _persons.FirstOrDefault(p => p.Id == id)?.DisplayName ?? id.ToString("N")[..8];
+
+  private string UnitName(Guid id) => _tree?.Find(id)?.Unit is { } u ? Name(u.NameEn, u.NameAr) : id.ToString("N")[..8];
+
+  private string PositionName(Guid? id, string? key) =>
+    id is null ? L["member"] : _positions.FirstOrDefault(p => p.Id == id) is { } p ? Name(p.NameEn, p.NameAr) : key ?? "";
+
+  // ───────── persons ─────────
+
+  private void OpenPerson(PersonDto? person)
+  {
+    _formError = null;
+    _person = person is null
+      ? new PersonForm { Issuer = Caller.Issuer ?? "" }
+      : new PersonForm
+      {
+        Id = person.Id, Version = person.Version, Issuer = person.Issuer, Subject = person.Subject, DisplayName = person.DisplayName,
+        Email = person.Email, IsEmployee = person.Employee is not null, EmployeeNumber = person.Employee?.EmployeeNumber,
+        JobTitle = person.Employee?.JobTitle, HiredOn = person.Employee?.HiredOn?.Date,
+      };
+  }
+
+  private async Task SavePersonAsync()
+  {
+    if (_person is not { } p || Org is not { } org) return;
+    _formError = null;
+    if (string.IsNullOrWhiteSpace(p.Issuer) || string.IsNullOrWhiteSpace(p.Subject) || string.IsNullOrWhiteSpace(p.DisplayName))
+    {
+      _formError = L["Enter the issuer, the subject and the display name."];
+      return;
+    }
+    EmployeeProfileDto? employee = p.IsEmployee
+      ? new EmployeeProfileDto
+      {
+        EmployeeNumber = Blank(p.EmployeeNumber), JobTitle = Blank(p.JobTitle),
+        HiredOn = p.HiredOn is { } d ? new DateTimeOffset(DateTime.SpecifyKind(d.Date, DateTimeKind.Unspecified), TimeSpan.Zero) : null,
+      }
+      : null;
+    await RunAsync(async () =>
+    {
+      var saved = p.Id is { } id
+        ? await Api.UpdatePersonAsync(org.Id, id, new UpdatePersonRequest { Version = p.Version, DisplayName = p.DisplayName.Trim(), Email = Blank(p.Email), Employee = employee })
+        : await Api.CreatePersonAsync(org.Id, new CreatePersonRequest { Issuer = p.Issuer.Trim(), Subject = p.Subject.Trim(), DisplayName = p.DisplayName.Trim(), Email = Blank(p.Email), Employee = employee });
+      await MudTail.ToastAsync(L["{0} saved.", saved.DisplayName], "success");
+      _person = null;
+      _personId = saved.Id;
+    }, ReloadAsync);
+  }
+
+  private static string? Blank(string? text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+
+  // ───────── memberships ─────────
+
+  private void OpenMembership(MembershipDto? m)
+  {
+    _formError = null;
+    _membership = m is null
+      ? new MembershipForm { PersonId = _personId, UnitId = _unitId }
+      : new MembershipForm
+      {
+        Id = m.Id, PersonId = m.PersonId, UnitId = m.UnitId, PositionId = m.PositionId,
+        From = m.From.ToLocalTime().Date, To = m.To?.ToLocalTime().Date, Primary = m.Primary,
+      };
+  }
+
+  // Midnight of the picked day where the user is, sent as UTC: the central store (PostgreSQL timestamptz) takes UTC only.
+  private static DateTimeOffset? Local(DateTime? day) =>
+    day is { } d ? new DateTimeOffset(d.Date, TimeZoneInfo.Local.GetUtcOffset(d.Date)).ToUniversalTime() : null;
+
+  private async Task SaveMembershipAsync()
+  {
+    if (_membership is not { } m || Org is not { } org) return;
+    _formError = null;
+    if (m.PersonId is not { } personId || m.UnitId is not { } unitId)
+    {
+      _formError = L["Choose the person and the unit."];
+      return;
+    }
+    if (m.To is { } to && m.From is { } from && to < from)
+    {
+      _formError = L["The end comes before the start."];
+      return;
+    }
+    await RunAsync(async () =>
+    {
+      if (m.Id is { } id)
+        await Api.UpdateMembershipAsync(org.Id, id, new UpdateMembershipRequest
+        {
+          PositionId = m.PositionId, From = Local(m.From) ?? DateTimeOffset.UtcNow, To = Local(m.To), Primary = m.Primary,
+        });
+      else
+        await Api.CreateMembershipAsync(org.Id, new CreateMembershipRequest
+        {
+          PersonId = personId, UnitId = unitId, PositionId = m.PositionId, From = Local(m.From), To = Local(m.To), Primary = m.Primary,
+        });
+      await MudTail.ToastAsync(L["Membership saved."], "success");
+      _membership = null;
+    }, ReloadAsync);
+  }
+
+  private async Task EndAsync(MembershipDto m)
+  {
+    if (Org is not { } org) return;
+    await RunAsync(async () =>
+    {
+      await Api.UpdateMembershipAsync(org.Id, m.Id, new UpdateMembershipRequest { PositionId = m.PositionId, From = m.From, To = DateTimeOffset.UtcNow, Primary = m.Primary });
+      await MudTail.ToastAsync(L["Membership ended."], "success");
+    }, ReloadAsync);
+  }
+
+  private async Task RemoveMembershipAsync()
+  {
+    if (_removing is not { } m || Org is not { } org) return;
+    await RunAsync(async () =>
+    {
+      await Api.RemoveMembershipAsync(org.Id, m.Id);
+      await MudTail.ToastAsync(L["Membership removed."], "success");
+      _removing = null;
+    }, ReloadAsync);
+  }
+}
