@@ -1,7 +1,7 @@
 <Project Sdk="Aspire.AppHost.Sdk/13.6.4">
 
   <!--
-    Organization playground: a small platform (PostgreSQL, identity, one WebApi, the Blazor client) with this repo's
+    Organization playground: two small deployments of the platform (see AppHost.cs) with this repo's
     module in it. See README.md, "Developing". The platform's projects come from a ModularBlazor.Platform checkout next
     to this repo (<workspace>/Platform and <workspace>/Module.Organization); set PlatformRoot to use another one, e.g.
     dotnet run -p:PlatformRoot=D:/src/Platform/.
@@ -22,6 +22,7 @@
   <ItemGroup>
     <!-- Keep in step with the Aspire SDK version above (and with the platform's Hybird app host). -->
     <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="13.6.5" />
+    <PackageReference Include="Aspire.Hosting.Yarp" Version="13.6.5" />
   </ItemGroup>
 
   <ItemGroup>

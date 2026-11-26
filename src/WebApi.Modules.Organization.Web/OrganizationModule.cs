@@ -1,3 +1,4 @@
+using System.Reflection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using soft.square.net.WebApi.Contracts;
@@ -24,7 +25,15 @@ namespace soft.square.net.WebApi.Modules.Organization.Web;
 /// </summary>
 public sealed class OrganizationModule : IRuntimeModule
 {
-    public ModuleManifest Manifest { get; } = new("organization", "Organization", "0.1.0", "organization")
+    /// <summary>
+    /// The bundle's one version (<c>Version</c> in Directory.Build.props, or <c>-p:Version=</c> at release): the
+    /// manifest's, the client parts' and the packages' alike. The build metadata (<c>+sha</c>) is dropped.
+    /// </summary>
+    public static string Version { get; } =
+        typeof(OrganizationModule).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0]
+        ?? "0.0.0";
+
+    public ModuleManifest Manifest { get; } = new("organization", "Organization", Version, "organization")
     {
         Description = "Organization: customers, the unit tree (Org > Sector > Department > Section), members, positions, tenant seeds and links. Central or Connector mode.",
         DefaultSettings = new Dictionary<string, string?>

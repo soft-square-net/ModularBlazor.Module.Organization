@@ -1,13 +1,15 @@
-# Packs the module's NuGet packages, in one version:
+# Packs the module's NuGet packages and its bundle, in one version:
 #   - soft.square.net.Organization.Contracts  (src/Organization.Contracts)
 #   - soft.square.net.Organization.Client     (src/WebApi.Modules.Organization.Client, the typed API client)
+#   - organization-<version>.zip              the bundle (scripts/Pack-Bundle.ps1: server, client parts, packages)
 #
-#   - push to main / pull request:  1.0.0-ci.<run>   packed and kept as a workflow artifact, not published
-#   - tag v1.2.0:                   1.2.0            published to GitHub Packages
+#   - push to main / pull request:  <VersionPrefix>-ci.<run>  packed and kept as workflow artifacts, not published
+#   - tag v1.2.0-preview.1:          1.2.0-preview.1          the packages are published to GitHub Packages; the bundle
+#                                                             is the "bundle" artifact (the admin installs it by hand)
 #
-# Published to https://nuget.pkg.github.com/soft-square-net/index.json with the workflow's own token, only on a v* tag
-# (the same pattern as the Platform repo's platform-packages.yml). The module bundle itself is not a package: see
-# build.yml and the README.
+# A tag must name the version in Directory.Build.props (v<VersionPrefix>-<VersionSuffix>), or the run fails before
+# anything is published. Published to https://nuget.pkg.github.com/soft-square-net/index.json with the workflow's own
+# token, only on a v* tag (the same pattern as the Platform repo's platform-packages.yml).
 name: Packages
 
 on:
@@ -35,23 +37,42 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Version
+        id: version
+        shell: pwsh
+        run: |
+          $project = (dotnet msbuild src/WebApi.Modules.Organization.Web -nologo -getProperty:Version).Trim()
+          $prefix = (dotnet msbuild src/WebApi.Modules.Organization.Web -nologo -getProperty:VersionPrefix).Trim()
+          if ($env:GITHUB_REF -like 'refs/tags/v*') {
+            $version = $env:GITHUB_REF_NAME.Substring(1)
+            if ($version -ne $project) { throw "Tag $env:GITHUB_REF_NAME does not match the version in Directory.Build.props ($project): tag v$project, or raise the version first." }
+          } else {
+            $version = "$prefix-ci.$env:GITHUB_RUN_NUMBER"
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Version $version (projects: $project)"
+
       - name: Pack
         shell: pwsh
         run: |
-          if ($env:GITHUB_REF -like 'refs/tags/v*') {
-            $version = @("-p:Version=$($env:GITHUB_REF_NAME.Substring(1))")
-          } else {
-            $version = @('--version-suffix', "ci.$env:GITHUB_RUN_NUMBER")
-          }
           foreach ($project in 'src/Organization.Contracts', 'src/WebApi.Modules.Organization.Client') {
-            dotnet pack $project -c Release -o artifacts/packages @version
+            dotnet pack $project -c Release -o artifacts/packages "-p:Version=${{ steps.version.outputs.version }}"
             if ($LASTEXITCODE -ne 0) { throw "dotnet pack failed for $project" }
           }
+
+      - name: Bundle
+        shell: pwsh
+        run: ./scripts/Pack-Bundle.ps1 -Version '${{ steps.version.outputs.version }}' -Output artifacts/bundle
 
       - uses: actions/upload-artifact@v4
         with:
           name: packages
           path: artifacts/packages/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle
+          path: artifacts/bundle/*.zip
 
       - name: Publish to GitHub Packages
         if: startsWith(github.ref, 'refs/tags/v')
