@@ -50,12 +50,13 @@ public sealed class Membership : AggregateRoot<Guid>
 
     private void Set(PositionDefinition? position, DateTimeOffset from, DateTimeOffset? to, bool primary, DateTimeOffset now)
     {
+        (from, to) = (from.ToUtc(), to.ToUtc()); // callers send local times (the browser's offset); the module stores UTC
         if (position is not null && position.OrgId != OrgId) throw new DomainException("The position belongs to another org.");
         if (to is not null && to <= from) throw new DomainException("A membership must end after it starts.");
         PositionId = position?.Id;
         From = from;
         To = to;
         Primary = primary;
-        UpdatedAt = now;
+        UpdatedAt = now.ToUtc();
     }
 }

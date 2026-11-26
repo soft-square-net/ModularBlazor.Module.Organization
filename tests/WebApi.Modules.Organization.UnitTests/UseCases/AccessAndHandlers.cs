@@ -70,7 +70,7 @@ public class AccessAndHandlers
         _access.Caller.Returns(caller);
 
         var result = await new CreateOrgHandler(_access, Substitute.For<IReadRepository<Org>>(), _store, _feed, _clock)
-            .Handle(new CreateOrgCommand(new CreateOrgRequest("acme", "Acme", null)), Ct);
+            .Handle(new CreateOrgCommand(new CreateOrgRequest("acme", "Acme", null!)), Ct);
 
         result.Status.ShouldBe(ResultStatus.Forbidden);
         await _store.DidNotReceive().SaveAsync(Arg.Any<CancellationToken>());
@@ -106,7 +106,7 @@ public class AccessAndHandlers
         Rights(grants: (department.Path, [OrgPermissions.UnitsManage]));
 
         var result = await new CreateUnitHandler(_access, _units, _types, _store, _feed, _clock)
-            .Handle(new CreateUnitCommand(_tree.OrgId, new CreateUnitRequest(department.Id, "section", "Desk", null, null, null, ["cat-1"])), Ct);
+            .Handle(new CreateUnitCommand(_tree.OrgId, new CreateUnitRequest(department.Id, "section", "Desk", null!, null, null, ["cat-1"])), Ct);
 
         result.IsSuccess.ShouldBeTrue();
         result.Value.ParentId.ShouldBe(department.Id);
@@ -124,7 +124,7 @@ public class AccessAndHandlers
         Rights(grants: (department.Path, [OrgPermissions.UnitsManage]));
 
         var result = await new CreateUnitHandler(_access, _units, _types, _store, _feed, _clock)
-            .Handle(new CreateUnitCommand(_tree.OrgId, new CreateUnitRequest(sector.Id, "department", "Other", null)), Ct);
+            .Handle(new CreateUnitCommand(_tree.OrgId, new CreateUnitRequest(sector.Id, "department", "Other", null!)), Ct);
 
         result.Status.ShouldBe(ResultStatus.Forbidden);
         await _store.DidNotReceive().SaveAsync(Arg.Any<CancellationToken>());
@@ -139,7 +139,7 @@ public class AccessAndHandlers
         Rights(administers: true);
 
         var result = await new UpdateUnitHandler(_access, _units, _types, _store, _feed, _clock)
-            .Handle(new UpdateUnitCommand(_tree.OrgId, sector.Id, new UpdateUnitRequest(Version: 3, "News", null)), Ct);
+            .Handle(new UpdateUnitCommand(_tree.OrgId, sector.Id, new UpdateUnitRequest(Version: 3, "News", null!)), Ct);
 
         result.Status.ShouldBe(ResultStatus.Conflict);
     }

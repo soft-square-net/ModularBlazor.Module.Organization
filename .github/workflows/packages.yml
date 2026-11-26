@@ -1,0 +1,62 @@
+# Packs the module's NuGet packages, in one version:
+#   - soft.square.net.Organization.Contracts  (src/Organization.Contracts)
+#   - soft.square.net.Organization.Client     (src/WebApi.Modules.Organization.Client, the typed API client)
+#
+#   - push to main / pull request:  1.0.0-ci.<run>   packed and kept as a workflow artifact, not published
+#   - tag v1.2.0:                   1.2.0            published to GitHub Packages
+#
+# Published to https://nuget.pkg.github.com/soft-square-net/index.json with the workflow's own token, only on a v* tag
+# (the same pattern as the Platform repo's platform-packages.yml). The module bundle itself is not a package: see
+# build.yml and the README.
+name: Packages
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+    env:
+      # NuGet.Config reads the platform feed's token from here (the Client project builds with the Module SDK).
+      GITHUB_PACKAGES_TOKEN: ${{ secrets.PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Pack
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -like 'refs/tags/v*') {
+            $version = @("-p:Version=$($env:GITHUB_REF_NAME.Substring(1))")
+          } else {
+            $version = @('--version-suffix', "ci.$env:GITHUB_RUN_NUMBER")
+          }
+          foreach ($project in 'src/Organization.Contracts', 'src/WebApi.Modules.Organization.Client') {
+            dotnet pack $project -c Release -o artifacts/packages @version
+            if ($LASTEXITCODE -ne 0) { throw "dotnet pack failed for $project" }
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: artifacts/packages/*
+
+      - name: Publish to GitHub Packages
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: >
+          dotnet nuget push "artifacts/packages/*.nupkg"
+          --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
+          --api-key "${{ secrets.GITHUB_TOKEN }}"
+          --skip-duplicate

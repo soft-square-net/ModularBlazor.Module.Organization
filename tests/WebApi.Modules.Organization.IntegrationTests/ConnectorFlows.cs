@@ -141,15 +141,27 @@ public sealed class ConnectorFlows : IDisposable
         outbox.ShouldAllBe(m => m.TenantId == "acme-news");
         IntegrationEnvelope.Parse(outbox.First(m => m.Type == OrgEvents.MembershipChanged).Envelope).UnitPath.ShouldNotBeNull();
         _replica.Live.Sent.ShouldContain(s => s.Topic == LiveTopicsOf(t.Football.Id) && s.Type == OrgEvents.UnitCreated);
+        _replica.Live.Sent.ShouldAllBe(s => s.Sequence == null);
+        // The org topic: one nudge per applied feed page (page size 3).
+        var orgMessages = _replica.Live.Sent.Where(s => s.Topic == OrgLiveTopic.Topic(t.Org.Id)).ToList();
+        orgMessages.ShouldNotBeEmpty();
+        orgMessages.ShouldAllBe(s => s.Type == OrgLiveTopic.ChangedMessage);
+        _replica.Live.Payloads.Where(p => p.Topic == OrgLiveTopic.Topic(t.Org.Id))
+            .ShouldAllBe(p => p.Payload.GetProperty("type").GetString() != null && p.Payload.GetProperty("id").GetString() != null);
 
-        var scopes = new UnitLiveScopes(new ReplicaUnitDirectory(_replica.NewContext()));
+        var scopes = new UnitLiveScopes(new ReplicaUnitDirectory(_replica.NewContext()), _replica.NewContext());
         (await scopes.ScopesAsync("unit", UnitPaths.Id(t.Football.Id), Ct)).ShouldBe(UnitScopes.For(t.Football.Path));
         (await scopes.ScopesAsync("unit", UnitPaths.Id(t.Sport.Id), Ct)).ShouldBeEmpty();
         (await scopes.ScopesAsync("post", UnitPaths.Id(t.Football.Id), Ct)).ShouldBeEmpty();
+        (await scopes.ScopesAsync(OrgLiveTopic.Kind, OrgLiveTopic.Key(t.Org.Id), Ct)).ShouldBe([UnitScopes.Of(t.Org.RootUnitId)]);
+        (await scopes.ScopesAsync(OrgLiveTopic.Kind, OrgLiveTopic.Key(Guid.NewGuid()), Ct)).ShouldBeEmpty(); // not this tenant's org
+        (await scopes.ScopesAsync(OrgLiveTopic.Kind, "not-an-id", Ct)).ShouldBeEmpty();
 
+        var sent = _replica.Live.Sent.Count;
         var second = await _replica.SyncAsync(t.Binding, Ct);
         second.Applied.ShouldBe(0);
         (await _replica.OutboxAsync(Ct)).Count.ShouldBe(outbox.Count);
+        _replica.Live.Sent.Count.ShouldBe(sent); // nothing applied, nothing sent
     }
 
     private static string LiveTopicsOf(Guid unitId) => $"unit:{UnitPaths.Id(unitId)}";

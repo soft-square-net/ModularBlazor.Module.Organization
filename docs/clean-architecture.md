@@ -61,7 +61,13 @@ Core  <-  UseCases  <-  Web
   `TenantDbContext` dispatcher in the same save, not through the mediator.
 - Failures a caller should see are `Result` statuses: `NotFound` (404), `Forbidden` (403), `Unauthorized` (401),
   `Conflict` (409), `Invalid` (400). A broken domain rule is a `DomainException`; `OrganizationProblemsFilter` turns it,
-  and EF concurrency conflicts, into 409 problems.
+  and EF concurrency conflicts, into 409 problems. A `DbUpdateException` is read with `DbFailures` (SQLSTATE or the
+  engine's error number, without referencing the providers): a unique-key or foreign-key violation is a 409 that
+  names it, anything else a logged 500, never a misleading "duplicate key".
+- Times: aggregates normalize incoming `DateTimeOffset`s to UTC (`UtcTimes.ToUtc`), and both DbContexts store every
+  `DateTimeOffset` as UTC (`UtcTimeConventions`, a same-type converter, so no migration changes).
+- Live messages go out after the commit and are best effort: `EfOrgStore` collects the changed org items in
+  `SavingChanges` (after the domain event handlers) and publishes `OrgLiveTopic` through `OrgLiveNudges`.
 - Optimistic concurrency: an aggregate that callers edit carries a `Version` (a concurrency token); edits and deletes
   send back the version they read.
 

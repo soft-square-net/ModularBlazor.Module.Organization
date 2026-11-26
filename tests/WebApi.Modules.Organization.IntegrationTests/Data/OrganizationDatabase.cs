@@ -27,6 +27,12 @@ public sealed class OrganizationDatabase : IDisposable
 
     public TestClock Clock { get; } = new();
 
+    /// <summary>The host's live notifier, as the module's container sees it.</summary>
+    public MemoryLiveNotifier Live { get; } = new();
+
+    /// <summary>The request's tenant (null: a central request outside any tenant, where nothing is published live).</summary>
+    public soft.square.net.WebApi.Contracts.Tenancy.TenantInfo? RequestTenant { get; set; }
+
     public OrganizationDatabase()
     {
         _connection.Open();
@@ -66,6 +72,8 @@ public sealed class OrganizationDatabase : IDisposable
         services.AddScoped<MembershipParts>();
         services.AddScoped<SeedAdmins>();
         services.AddSingleton(Options.Create(new OrganizationOptions { Mode = OrganizationMode.Central, MaxFeedPage = 50 }));
+        services.AddSingleton<soft.square.net.WebApi.Contracts.Live.ILiveNotifier>(Live);
+        if (RequestTenant is { } tenant) services.AddSingleton<soft.square.net.WebApi.Contracts.Tenancy.ITenantContext>(new FixedTenant(tenant));
         return services.BuildServiceProvider();
     }
 

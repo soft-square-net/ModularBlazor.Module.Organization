@@ -180,10 +180,12 @@ public sealed class MemoryGrantStore : IGrantStore
 public sealed class MemoryLiveNotifier : ILiveNotifier
 {
     public List<(string Topic, string Type, long? Sequence)> Sent { get; } = [];
+    public List<(string Topic, System.Text.Json.JsonElement Payload)> Payloads { get; } = [];
 
     public Task PublishAsync(string topic, string type, System.Text.Json.JsonElement? payload = null, long? sequence = null, CancellationToken ct = default)
     {
         Sent.Add((topic, type, sequence));
+        if (payload is { } p) Payloads.Add((topic, p.Clone()));
         return Task.CompletedTask;
     }
 

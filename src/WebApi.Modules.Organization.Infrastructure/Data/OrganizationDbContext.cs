@@ -41,6 +41,13 @@ public sealed class OrganizationDbContext(DbContextOptions<OrganizationDbContext
     public DbSet<TenantLink> Links => Set<TenantLink>();
     public DbSet<FeedEntry> Feed => Set<FeedEntry>();
 
+    /// <summary>Every time is stored as UTC (<see cref="UtcTimeConventions"/>).</summary>
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        base.ConfigureConventions(configurationBuilder);
+        configurationBuilder.StoreDateTimeOffsetsAsUtc();
+    }
+
     protected override void ConfigureModel(ModelBuilder modelBuilder) =>
         modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
 }

@@ -14,6 +14,14 @@
       copying it.
   -->
 
+  <!-- Also shipped as the NuGet package soft.square.net.Organization.Client (.github/workflows/packages.yml), for
+       clients outside the platform's module catalog (a service, a tool, another host) that call the Organization API. -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>$(SoftSquarePrefix).Organization.Client</PackageId>
+    <Description>Typed C# client (NSwag) for the ModularBlazor Organization API: the central management API under /api/organization and the connector's local reads under /api/organization/local.</Description>
+  </PropertyGroup>
+
   <PropertyGroup>
     <ModuleLayer>Client</ModuleLayer>
     <ModuleOpenApiDocument>$(MSBuildProjectDirectory)/../openapi/organization.json</ModuleOpenApiDocument>
