@@ -1231,6 +1231,167 @@
           }
         }
       }
+    },
+    "/api/organization/local/units": {
+      "get": {
+        "tags": [
+          "Local units"
+        ],
+        "summary": "The tenant's units and its root unit's ancestors, root first (from the replica).",
+        "operationId": "Organization_ListLocalUnits",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DirectoryUnitDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/organization/local/units/{unitId}": {
+      "get": {
+        "tags": [
+          "Local units"
+        ],
+        "summary": "One unit of the tenant (or an ancestor of its root unit).",
+        "operationId": "Organization_GetLocalUnit",
+        "parameters": [
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectoryUnitDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/organization/local/units/{unitId}/ancestors": {
+      "get": {
+        "tags": [
+          "Local units"
+        ],
+        "summary": "A unit's ancestors, root first.",
+        "operationId": "Organization_GetLocalAncestors",
+        "parameters": [
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DirectoryUnitDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/organization/local/units/{unitId}/categories": {
+      "get": {
+        "tags": [
+          "Local units"
+        ],
+        "summary": "A unit's post categories: its own (a Section), or those of the tenant's units below it.",
+        "operationId": "Organization_GetLocalCategories",
+        "parameters": [
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/organization/local/units/{unitId}/members": {
+      "get": {
+        "tags": [
+          "Local units"
+        ],
+        "summary": "A unit's memberships (org.read on the unit or above it).",
+        "operationId": "Organization_GetLocalMembers",
+        "parameters": [
+          {
+            "name": "unitId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DirectoryMemberDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1571,6 +1732,164 @@
           "rootUnitId": {
             "type": "string",
             "format": "uuid"
+          }
+        }
+      },
+      "DirectoryMemberDto": {
+        "required": [
+          "membershipId",
+          "personId",
+          "issuer",
+          "subject",
+          "displayName",
+          "unitId",
+          "positionId",
+          "positionKey",
+          "permissions",
+          "from",
+          "to",
+          "primary"
+        ],
+        "type": "object",
+        "properties": {
+          "membershipId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "personId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "unitId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "positionId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "positionKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "to": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "primary": {
+            "type": "boolean"
+          }
+        }
+      },
+      "DirectoryUnitDto": {
+        "required": [
+          "id",
+          "orgId",
+          "parentId",
+          "typeKey",
+          "path",
+          "nameEn",
+          "nameAr",
+          "tags",
+          "timeZone",
+          "categories",
+          "binding",
+          "seedId",
+          "version",
+          "inTenant"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orgId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "parentId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "typeKey": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "nameEn": {
+            "type": "string"
+          },
+          "nameAr": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "timeZone": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "binding": {
+            "$ref": "#/components/schemas/TenantBindingKind"
+          },
+          "seedId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "inTenant": {
+            "type": "boolean"
           }
         }
       },
@@ -2621,6 +2940,9 @@
     },
     {
       "name": "Feed and links"
+    },
+    {
+      "name": "Local units"
     }
   ]
 }

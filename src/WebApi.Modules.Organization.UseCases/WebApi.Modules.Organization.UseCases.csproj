@@ -2,8 +2,9 @@
   <Sdk Name="soft.square.net.ModularBlazor.Module.Sdk" />
 
   <!--
-    Use cases: one folder per use case (Notes/Create, Notes/Edit, ...), each a Mediator command or query and its
-    handler, returning an Ardalis Result. Also the module's permissions, settings and DTOs.
+    Use cases: one folder per resource (Orgs, Units, Persons, Memberships, Positions, Seeds, Feed; Local for the
+    replica's read API; Connector for the connector's rules), each a Mediator command or query and its handler,
+    returning an Ardalis Result. Also the module's permissions, settings and access rules.
     References Core only. The Module SDK compiles it against WebApi.SharedKernel, WebApi.Contracts and ASP.NET Core,
     all provided by the host. Mediator.Abstractions and Ardalis.Result are private: copied into the module's output
     and loaded in its own load context, so they unload with it.

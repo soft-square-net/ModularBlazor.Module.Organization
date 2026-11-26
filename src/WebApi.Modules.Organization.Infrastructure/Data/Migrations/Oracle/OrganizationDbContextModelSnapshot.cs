@@ -81,6 +81,10 @@ namespace soft.square.net.WebApi.Modules.Organization.Infrastructure.Data.Migrat
                     b.Property<bool>("Primary")
                         .HasColumnType("BOOLEAN");
 
+                    b.Property<string>("SeedId")
+                        .HasMaxLength(64)
+                        .HasColumnType("NVARCHAR2(64)");
+
                     b.Property<DateTimeOffset?>("To")
                         .HasColumnType("TIMESTAMP(7) WITH TIME ZONE");
 
@@ -95,6 +99,8 @@ namespace soft.square.net.WebApi.Modules.Organization.Infrastructure.Data.Migrat
                     b.HasIndex("PersonId");
 
                     b.HasIndex("PositionId");
+
+                    b.HasIndex("SeedId");
 
                     b.HasIndex("OrgId", "UnitId");
 

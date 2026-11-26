@@ -238,6 +238,46 @@ namespace soft.square.net.WebApi.Modules.Organization.Client
         /// <exception cref="OrganizationApiException">A server side error occurred.</exception>
         System.Threading.Tasks.Task ReportSeedAsync(string seedId, SeedReportRequest body, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// The tenant's units and its root unit's ancestors, root first (from the replica).
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="OrganizationApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<DirectoryUnitDto>> ListLocalUnitsAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// One unit of the tenant (or an ancestor of its root unit).
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="OrganizationApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<DirectoryUnitDto> GetLocalUnitAsync(System.Guid unitId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// A unit's ancestors, root first.
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="OrganizationApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<DirectoryUnitDto>> GetLocalAncestorsAsync(System.Guid unitId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// A unit's post categories: its own (a Section), or those of the tenant's units below it.
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="OrganizationApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<string>> GetLocalCategoriesAsync(System.Guid unitId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// A unit's memberships (org.read on the unit or above it).
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="OrganizationApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<DirectoryMemberDto>> GetLocalMembersAsync(System.Guid unitId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NSwag", "14.8.0.0 (NJsonSchema v11.6.2.0 (Newtonsoft.Json v13.0.0.0))")]
@@ -2824,6 +2864,395 @@ namespace soft.square.net.WebApi.Modules.Organization.Client
             }
         }
 
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// The tenant's units and its root unit's ancestors, root first (from the replica).
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="OrganizationApiException">A server side error occurred.</exception>
+        public virtual async System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<DirectoryUnitDto>> ListLocalUnitsAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        {
+            var client_ = _httpClient;
+            var disposeClient_ = false;
+            try
+            {
+                using (var request_ = new System.Net.Http.HttpRequestMessage())
+                {
+                    request_.Method = new System.Net.Http.HttpMethod("GET");
+                    request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
+
+                    var urlBuilder_ = new System.Text.StringBuilder();
+                
+                    // Operation Path: "api/organization/local/units"
+                    urlBuilder_.Append("api/organization/local/units");
+
+                    PrepareRequest(client_, request_, urlBuilder_);
+
+                    var url_ = urlBuilder_.ToString();
+                    request_.RequestUri = new System.Uri(url_, System.UriKind.RelativeOrAbsolute);
+
+                    PrepareRequest(client_, request_, url_);
+
+                    var response_ = await client_.SendAsync(request_, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                    var disposeResponse_ = true;
+                    try
+                    {
+                        var headers_ = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IEnumerable<string>>();
+                        foreach (var item_ in response_.Headers)
+                            headers_[item_.Key] = item_.Value;
+                        if (response_.Content != null && response_.Content.Headers != null)
+                        {
+                            foreach (var item_ in response_.Content.Headers)
+                                headers_[item_.Key] = item_.Value;
+                        }
+
+                        ProcessResponse(client_, response_);
+
+                        var status_ = (int)response_.StatusCode;
+                        if (status_ == 200)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<System.Collections.Generic.IReadOnlyList<DirectoryUnitDto>>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new OrganizationApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            return objectResponse_.Object;
+                        }
+                        else
+                        {
+                            var responseData_ = response_.Content == null ? null : await ReadAsStringAsync(response_.Content, cancellationToken).ConfigureAwait(false);
+                            throw new OrganizationApiException("The HTTP status code of the response was not expected (" + status_ + ").", status_, responseData_, headers_, null);
+                        }
+                    }
+                    finally
+                    {
+                        if (disposeResponse_)
+                            response_.Dispose();
+                    }
+                }
+            }
+            finally
+            {
+                if (disposeClient_)
+                    client_.Dispose();
+            }
+        }
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// One unit of the tenant (or an ancestor of its root unit).
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="OrganizationApiException">A server side error occurred.</exception>
+        public virtual async System.Threading.Tasks.Task<DirectoryUnitDto> GetLocalUnitAsync(System.Guid unitId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        {
+            if (unitId == null)
+                throw new System.ArgumentNullException("unitId");
+
+            var client_ = _httpClient;
+            var disposeClient_ = false;
+            try
+            {
+                using (var request_ = new System.Net.Http.HttpRequestMessage())
+                {
+                    request_.Method = new System.Net.Http.HttpMethod("GET");
+                    request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
+
+                    var urlBuilder_ = new System.Text.StringBuilder();
+                
+                    // Operation Path: "api/organization/local/units/{unitId}"
+                    urlBuilder_.Append("api/organization/local/units/");
+                    urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(unitId, System.Globalization.CultureInfo.InvariantCulture)));
+
+                    PrepareRequest(client_, request_, urlBuilder_);
+
+                    var url_ = urlBuilder_.ToString();
+                    request_.RequestUri = new System.Uri(url_, System.UriKind.RelativeOrAbsolute);
+
+                    PrepareRequest(client_, request_, url_);
+
+                    var response_ = await client_.SendAsync(request_, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                    var disposeResponse_ = true;
+                    try
+                    {
+                        var headers_ = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IEnumerable<string>>();
+                        foreach (var item_ in response_.Headers)
+                            headers_[item_.Key] = item_.Value;
+                        if (response_.Content != null && response_.Content.Headers != null)
+                        {
+                            foreach (var item_ in response_.Content.Headers)
+                                headers_[item_.Key] = item_.Value;
+                        }
+
+                        ProcessResponse(client_, response_);
+
+                        var status_ = (int)response_.StatusCode;
+                        if (status_ == 200)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<DirectoryUnitDto>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new OrganizationApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            return objectResponse_.Object;
+                        }
+                        else
+                        {
+                            var responseData_ = response_.Content == null ? null : await ReadAsStringAsync(response_.Content, cancellationToken).ConfigureAwait(false);
+                            throw new OrganizationApiException("The HTTP status code of the response was not expected (" + status_ + ").", status_, responseData_, headers_, null);
+                        }
+                    }
+                    finally
+                    {
+                        if (disposeResponse_)
+                            response_.Dispose();
+                    }
+                }
+            }
+            finally
+            {
+                if (disposeClient_)
+                    client_.Dispose();
+            }
+        }
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// A unit's ancestors, root first.
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="OrganizationApiException">A server side error occurred.</exception>
+        public virtual async System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<DirectoryUnitDto>> GetLocalAncestorsAsync(System.Guid unitId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        {
+            if (unitId == null)
+                throw new System.ArgumentNullException("unitId");
+
+            var client_ = _httpClient;
+            var disposeClient_ = false;
+            try
+            {
+                using (var request_ = new System.Net.Http.HttpRequestMessage())
+                {
+                    request_.Method = new System.Net.Http.HttpMethod("GET");
+                    request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
+
+                    var urlBuilder_ = new System.Text.StringBuilder();
+                
+                    // Operation Path: "api/organization/local/units/{unitId}/ancestors"
+                    urlBuilder_.Append("api/organization/local/units/");
+                    urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(unitId, System.Globalization.CultureInfo.InvariantCulture)));
+                    urlBuilder_.Append("/ancestors");
+
+                    PrepareRequest(client_, request_, urlBuilder_);
+
+                    var url_ = urlBuilder_.ToString();
+                    request_.RequestUri = new System.Uri(url_, System.UriKind.RelativeOrAbsolute);
+
+                    PrepareRequest(client_, request_, url_);
+
+                    var response_ = await client_.SendAsync(request_, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                    var disposeResponse_ = true;
+                    try
+                    {
+                        var headers_ = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IEnumerable<string>>();
+                        foreach (var item_ in response_.Headers)
+                            headers_[item_.Key] = item_.Value;
+                        if (response_.Content != null && response_.Content.Headers != null)
+                        {
+                            foreach (var item_ in response_.Content.Headers)
+                                headers_[item_.Key] = item_.Value;
+                        }
+
+                        ProcessResponse(client_, response_);
+
+                        var status_ = (int)response_.StatusCode;
+                        if (status_ == 200)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<System.Collections.Generic.IReadOnlyList<DirectoryUnitDto>>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new OrganizationApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            return objectResponse_.Object;
+                        }
+                        else
+                        {
+                            var responseData_ = response_.Content == null ? null : await ReadAsStringAsync(response_.Content, cancellationToken).ConfigureAwait(false);
+                            throw new OrganizationApiException("The HTTP status code of the response was not expected (" + status_ + ").", status_, responseData_, headers_, null);
+                        }
+                    }
+                    finally
+                    {
+                        if (disposeResponse_)
+                            response_.Dispose();
+                    }
+                }
+            }
+            finally
+            {
+                if (disposeClient_)
+                    client_.Dispose();
+            }
+        }
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// A unit's post categories: its own (a Section), or those of the tenant's units below it.
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="OrganizationApiException">A server side error occurred.</exception>
+        public virtual async System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<string>> GetLocalCategoriesAsync(System.Guid unitId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        {
+            if (unitId == null)
+                throw new System.ArgumentNullException("unitId");
+
+            var client_ = _httpClient;
+            var disposeClient_ = false;
+            try
+            {
+                using (var request_ = new System.Net.Http.HttpRequestMessage())
+                {
+                    request_.Method = new System.Net.Http.HttpMethod("GET");
+                    request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
+
+                    var urlBuilder_ = new System.Text.StringBuilder();
+                
+                    // Operation Path: "api/organization/local/units/{unitId}/categories"
+                    urlBuilder_.Append("api/organization/local/units/");
+                    urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(unitId, System.Globalization.CultureInfo.InvariantCulture)));
+                    urlBuilder_.Append("/categories");
+
+                    PrepareRequest(client_, request_, urlBuilder_);
+
+                    var url_ = urlBuilder_.ToString();
+                    request_.RequestUri = new System.Uri(url_, System.UriKind.RelativeOrAbsolute);
+
+                    PrepareRequest(client_, request_, url_);
+
+                    var response_ = await client_.SendAsync(request_, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                    var disposeResponse_ = true;
+                    try
+                    {
+                        var headers_ = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IEnumerable<string>>();
+                        foreach (var item_ in response_.Headers)
+                            headers_[item_.Key] = item_.Value;
+                        if (response_.Content != null && response_.Content.Headers != null)
+                        {
+                            foreach (var item_ in response_.Content.Headers)
+                                headers_[item_.Key] = item_.Value;
+                        }
+
+                        ProcessResponse(client_, response_);
+
+                        var status_ = (int)response_.StatusCode;
+                        if (status_ == 200)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<System.Collections.Generic.IReadOnlyList<string>>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new OrganizationApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            return objectResponse_.Object;
+                        }
+                        else
+                        {
+                            var responseData_ = response_.Content == null ? null : await ReadAsStringAsync(response_.Content, cancellationToken).ConfigureAwait(false);
+                            throw new OrganizationApiException("The HTTP status code of the response was not expected (" + status_ + ").", status_, responseData_, headers_, null);
+                        }
+                    }
+                    finally
+                    {
+                        if (disposeResponse_)
+                            response_.Dispose();
+                    }
+                }
+            }
+            finally
+            {
+                if (disposeClient_)
+                    client_.Dispose();
+            }
+        }
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <summary>
+        /// A unit's memberships (org.read on the unit or above it).
+        /// </summary>
+        /// <returns>OK</returns>
+        /// <exception cref="OrganizationApiException">A server side error occurred.</exception>
+        public virtual async System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<DirectoryMemberDto>> GetLocalMembersAsync(System.Guid unitId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        {
+            if (unitId == null)
+                throw new System.ArgumentNullException("unitId");
+
+            var client_ = _httpClient;
+            var disposeClient_ = false;
+            try
+            {
+                using (var request_ = new System.Net.Http.HttpRequestMessage())
+                {
+                    request_.Method = new System.Net.Http.HttpMethod("GET");
+                    request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
+
+                    var urlBuilder_ = new System.Text.StringBuilder();
+                
+                    // Operation Path: "api/organization/local/units/{unitId}/members"
+                    urlBuilder_.Append("api/organization/local/units/");
+                    urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(unitId, System.Globalization.CultureInfo.InvariantCulture)));
+                    urlBuilder_.Append("/members");
+
+                    PrepareRequest(client_, request_, urlBuilder_);
+
+                    var url_ = urlBuilder_.ToString();
+                    request_.RequestUri = new System.Uri(url_, System.UriKind.RelativeOrAbsolute);
+
+                    PrepareRequest(client_, request_, url_);
+
+                    var response_ = await client_.SendAsync(request_, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                    var disposeResponse_ = true;
+                    try
+                    {
+                        var headers_ = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IEnumerable<string>>();
+                        foreach (var item_ in response_.Headers)
+                            headers_[item_.Key] = item_.Value;
+                        if (response_.Content != null && response_.Content.Headers != null)
+                        {
+                            foreach (var item_ in response_.Content.Headers)
+                                headers_[item_.Key] = item_.Value;
+                        }
+
+                        ProcessResponse(client_, response_);
+
+                        var status_ = (int)response_.StatusCode;
+                        if (status_ == 200)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<System.Collections.Generic.IReadOnlyList<DirectoryMemberDto>>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new OrganizationApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            return objectResponse_.Object;
+                        }
+                        else
+                        {
+                            var responseData_ = response_.Content == null ? null : await ReadAsStringAsync(response_.Content, cancellationToken).ConfigureAwait(false);
+                            throw new OrganizationApiException("The HTTP status code of the response was not expected (" + status_ + ").", status_, responseData_, headers_, null);
+                        }
+                    }
+                    finally
+                    {
+                        if (disposeResponse_)
+                            response_.Dispose();
+                    }
+                }
+            }
+            finally
+            {
+                if (disposeClient_)
+                    client_.Dispose();
+            }
+        }
+
         protected struct ObjectResponseResult<T>
         {
             public ObjectResponseResult(T responseObject, string responseText)
@@ -3258,6 +3687,131 @@ namespace soft.square.net.WebApi.Modules.Organization.Client
         [System.Text.Json.Serialization.JsonPropertyName("rootUnitId")]
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
         public System.Guid RootUnitId { get; set; } = default!;
+
+        private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
+
+        [System.Text.Json.Serialization.JsonExtensionData]
+        public System.Collections.Generic.IDictionary<string, object> AdditionalProperties
+        {
+            get { return _additionalProperties ?? (_additionalProperties = new System.Collections.Generic.Dictionary<string, object>()); }
+            set { _additionalProperties = value; }
+        }
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.8.0.0 (NJsonSchema v11.6.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class DirectoryMemberDto
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("membershipId")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public System.Guid MembershipId { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("personId")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public System.Guid PersonId { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("issuer")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public string Issuer { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("subject")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public string Subject { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("displayName")]
+        public string? DisplayName { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("unitId")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public System.Guid UnitId { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("positionId")]
+        public System.Guid? PositionId { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("positionKey")]
+        public string? PositionKey { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("permissions")]
+        [System.ComponentModel.DataAnnotations.Required]
+        public System.Collections.Generic.IReadOnlyList<string> Permissions { get; set; } = new System.Collections.Generic.List<string>();
+
+        [System.Text.Json.Serialization.JsonPropertyName("from")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public System.DateTimeOffset From { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("to")]
+        public System.DateTimeOffset? To { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("primary")]
+        public bool Primary { get; set; } = default!;
+
+        private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
+
+        [System.Text.Json.Serialization.JsonExtensionData]
+        public System.Collections.Generic.IDictionary<string, object> AdditionalProperties
+        {
+            get { return _additionalProperties ?? (_additionalProperties = new System.Collections.Generic.Dictionary<string, object>()); }
+            set { _additionalProperties = value; }
+        }
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.8.0.0 (NJsonSchema v11.6.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class DirectoryUnitDto
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("id")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public System.Guid Id { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("orgId")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public System.Guid OrgId { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("parentId")]
+        public System.Guid? ParentId { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("typeKey")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public string TypeKey { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("path")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public string Path { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("nameEn")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public string NameEn { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("nameAr")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public string NameAr { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("tags")]
+        [System.ComponentModel.DataAnnotations.Required]
+        public System.Collections.Generic.IReadOnlyList<string> Tags { get; set; } = new System.Collections.Generic.List<string>();
+
+        [System.Text.Json.Serialization.JsonPropertyName("timeZone")]
+        public string? TimeZone { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("categories")]
+        [System.ComponentModel.DataAnnotations.Required]
+        public System.Collections.Generic.IReadOnlyList<string> Categories { get; set; } = new System.Collections.Generic.List<string>();
+
+        [System.Text.Json.Serialization.JsonPropertyName("binding")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<TenantBindingKind>))]
+        public TenantBindingKind Binding { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("seedId")]
+        public string? SeedId { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("version")]
+        public int Version { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("inTenant")]
+        public bool InTenant { get; set; } = default!;
 
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
 

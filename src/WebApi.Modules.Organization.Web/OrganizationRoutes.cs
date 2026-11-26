@@ -9,7 +9,10 @@ namespace soft.square.net.WebApi.Modules.Organization.Web;
 /// <para>The central management API: every endpoint runs with or without a tenant (<c>TenantOptional</c>: the data is
 /// platform-level), needs a signed-in caller, and authorizes in the use case from the service's own data (platform
 /// admins, customer admins, unit admins and managers by membership position, service clients). It answers 404 outside
-/// Central mode. One file per resource under <c>Endpoints/</c>, each endpoint named <c>Organization_&lt;Operation&gt;</c>
+/// Central mode.</para>
+/// <para>The local read API (<c>/local/units</c>): the current tenant's units from this deployment's replica, in every
+/// mode. It needs a tenant and a signed-in caller of it.</para>
+/// <para>One file per resource under <c>Endpoints/</c>, each endpoint named <c>Organization_&lt;Operation&gt;</c>
 /// (the OpenAPI operation id, which names the generated client's method).</para>
 /// </summary>
 public sealed class OrganizationRoutes : ICarterModule
@@ -32,5 +35,11 @@ public sealed class OrganizationRoutes : ICarterModule
         SeedEndpoints.MapOrg(org.MapGroup("/seeds").WithTags("Tenant seeds"));
         SeedEndpoints.MapDeployment(central.MapGroup("/seeds").WithTags("Tenant seeds"));
         FeedEndpoints.Map(org.WithTags("Feed and links"));
+
+        // This deployment's replica, for the current tenant (a tenant is required): every mode.
+        LocalEndpoints.Map(app.MapGroup("/" + LocalRoutes.Units)
+            .RequireAuthorization()
+            .AddEndpointFilter<OrganizationProblemsFilter>()
+            .WithTags("Local units"));
     }
 }

@@ -11,7 +11,9 @@ public static class ServiceConfigs
 {
     /// <summary>
     /// Everything the module registers, in the module's own container (never the host's). Central mode adds the
-    /// platform-level database and the services of the management API; Connector mode (P1-2) adds nothing yet.
+    /// platform-level database and the services of the management API. Both modes run the connector: the per-tenant
+    /// replica, its local read API and live scopes, and, once <c>Organization:CentralUrl</c> is set, the sync with the
+    /// central service and the tenant seed source.
     /// </summary>
     public static IServiceCollection AddServiceConfigs(this IServiceCollection services, IConfiguration settings)
     {
@@ -29,6 +31,7 @@ public static class ServiceConfigs
             services.AddScoped<MembershipParts>();
             services.AddScoped<SeedAdmins>();
         }
+        services.AddConnector(options);
 
         services.AddMediatorSourceGen();
         return services;

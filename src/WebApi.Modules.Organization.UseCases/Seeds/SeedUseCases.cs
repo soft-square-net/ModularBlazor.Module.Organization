@@ -130,22 +130,35 @@ public sealed class ReportSeedHandler(IOrgAccess access, IReadRepository<TenantS
     }
 }
 
-/// <summary>A seed's admins are unit admins of its root unit: each one without such a membership gets one.</summary>
+/// <summary>
+/// A seed's admins are unit admins of its root unit: each one without such a membership gets one, created for the seed
+/// (<see cref="Membership.SeedId"/>); a person who left the admin list loses the memberships the seed created for them.
+/// Memberships someone added by hand are never removed here.
+/// </summary>
 public sealed class SeedAdmins(IReadRepository<Person> persons, IReadRepository<PositionDefinition> positions, IReadRepository<Membership> memberships, IOrgStore store, OrgFeed feed)
 {
     public async Task<Result> EnsureUnitAdminsAsync(TenantSeed seed, OrgUnit root, DateTimeOffset now, CancellationToken ct)
     {
-        if (seed.AdminPersonIds.Count == 0) return Result.Success();
-        var admins = await persons.ListAsync(new PersonsByIdsSpec(seed.OrgId, [.. seed.AdminPersonIds]), ct);
+        var admins = seed.AdminPersonIds.Count == 0 ? [] : await persons.ListAsync(new PersonsByIdsSpec(seed.OrgId, [.. seed.AdminPersonIds]), ct);
         var missing = seed.AdminPersonIds.Except(admins.Select(p => p.Id)).ToList();
         if (missing.Count > 0) return Result.Invalid(new ValidationError("AdminPersonIds", $"These are not persons of the org: {string.Join(", ", missing)}."));
 
-        var position = await positions.FirstOrDefaultAsync(new PositionByKeySpec(seed.OrgId, PositionDefinition.UnitAdminKey), ct);
-        if (position is null) return Result.Conflict($"The org has no '{PositionDefinition.UnitAdminKey}' position for the seed's admins.");
         var current = await memberships.ListAsync(new MembershipsSpec(seed.OrgId, unitId: root.Id), ct);
+        var position = await positions.FirstOrDefaultAsync(new PositionByKeySpec(seed.OrgId, PositionDefinition.UnitAdminKey), ct);
+
+        // Former admins: the memberships this seed created for them go (wherever the seed's root unit is now).
+        foreach (var stale in current.Where(m => m.SeedId == seed.Id && !seed.AdminPersonIds.Contains(m.PersonId)).ToList())
+        {
+            var person = await persons.FirstOrDefaultAsync(new PersonByIdSpec(seed.OrgId, stale.PersonId), ct);
+            store.Remove(stale);
+            if (person is not null) feed.MembershipChanged(stale, person, root, position?.Id == stale.PositionId ? position : null, removed: true);
+        }
+
+        if (admins.Count == 0) return Result.Success();
+        if (position is null) return Result.Conflict($"The org has no '{PositionDefinition.UnitAdminKey}' position for the seed's admins.");
         foreach (var person in admins.Where(p => !current.Any(m => m.PersonId == p.Id && m.PositionId == position.Id && m.IsActiveAt(now))))
         {
-            var membership = Membership.Create(person, root, position, now, null, primary: false, now);
+            var membership = Membership.Create(person, root, position, now, null, primary: false, now, seed.Id);
             store.Add(membership);
             feed.MembershipChanged(membership, person, root, position);
         }

@@ -3,7 +3,11 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using soft.square.net.Organization.Contracts;
+using soft.square.net.WebApi.Contracts.Live;
+using soft.square.net.WebApi.Contracts.Tenancy;
 using soft.square.net.WebApi.Data;
+using soft.square.net.WebApi.Modules.Organization.Infrastructure.Connector;
 using soft.square.net.WebApi.Modules.Organization.Infrastructure.Data;
 using soft.square.net.WebApi.Modules.Organization.UseCases;
 
@@ -37,6 +41,40 @@ public static class InfrastructureServiceExtensions
         services.TryAddScoped(typeof(SharedKernel.IReadRepository<>), typeof(EfRepository<>));
         services.AddScoped<IOrgStore, EfOrgStore>();
         services.AddHostedService<CentralDatabaseMigrator>();
+        return services;
+    }
+
+    /// <summary>
+    /// The connector, in every deployment (Central mode included):
+    /// <list type="bullet">
+    /// <item>the per-tenant <see cref="ReplicaDbContext"/>, migrated for every tenant, with the integration outbox the
+    /// org.* events are republished through (<c>AddIntegrationEvents</c>);</item>
+    /// <item><see cref="IUnitDirectory"/> and the <c>unit:</c> live topics' <see cref="ILiveScopeResolver"/>, from the replica;</item>
+    /// <item>the typed HTTP <see cref="IOrganizationClient"/> with the connector's service token;</item>
+    /// <item>when <c>Organization:CentralUrl</c> is set: the poller (<see cref="OrgConnector"/>), the first sync of new
+    /// tenants (<see cref="ReplicaInitializer"/>) and the platform's <see cref="ITenantSeedSource"/>.</item>
+    /// </list>
+    /// Call it after <see cref="AddCentralStore"/>: the default repositories stay on the central context.
+    /// </summary>
+    public static IServiceCollection AddConnector(this IServiceCollection services, OrganizationOptions options)
+    {
+        services.AddTenantDbContext<ReplicaDbContext>();
+        services.AddIntegrationEvents<ReplicaDbContext>(o => o.Source = "organization");
+        services.AddScoped<IUnitDirectory, ReplicaUnitDirectory>();
+        services.AddScoped<ILiveScopeResolver, UnitLiveScopes>();
+        services.AddScoped<ReplicaSync>();
+
+        services.AddSingleton<CentralHttp>();
+        services.AddSingleton<IOrganizationClient, CentralOrganizationClient>();
+        services.AddSingleton<SeedCatalog>();
+        services.AddSingleton<IReplicaSyncLock, TenantDatabaseSyncLock>();
+        services.AddSingleton<ReplicaSyncRunner>();
+        if (!options.ConnectorEnabled) return services;
+
+        services.AddSingleton<OrgConnector>();
+        services.AddHostedService(sp => sp.GetRequiredService<OrgConnector>());
+        services.AddSingleton<ITenantInitializer, ReplicaInitializer>(); // after the replica's migrations (AddTenantDbContext)
+        services.AddScoped<ITenantSeedSource, OrgSeedSource>();
         return services;
     }
 }
