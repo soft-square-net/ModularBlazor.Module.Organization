@@ -24,6 +24,7 @@ Deployment A (central)                         Deployment B (a connector)
 | [Setup](setup.md) | the central deployment, a connector deployment, the identity client, the gateway, the Blazor host |
 | [Settings reference](settings.md) | every setting, where it goes and its default |
 | [Tenant seeds](seeds.md) | how a unit gets its own tenant in a deployment, and the status it reports |
+| [Post categories](categories.md) | a Section's categories, the wildcard `*` (all categories), and how consumers match it |
 | [Tenant links](links.md) | the links skeleton between sibling tenants |
 | [Troubleshooting](troubleshooting.md) | symptoms, causes and fixes, including two known gaps of this preview |
 

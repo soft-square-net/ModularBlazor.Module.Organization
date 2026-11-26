@@ -54,6 +54,8 @@ public sealed class UnitForm
         var holds = type?.HoldsCategories ?? false;
         if (holds && Clean(Categories).Count == 0) problems.Add("A section needs at least one post category.");
         if (!holds && Clean(Categories).Count > 0) problems.Add("Only sections hold post categories.");
+        if (ContentCategories.IsAll(Clean(Categories)) && Clean(Categories).Count > 1)
+            problems.Add("All categories can't be combined with other categories.");
         return problems;
     }
 

@@ -23,6 +23,17 @@ public class UnitFormTests
     }
 
     [Fact]
+    public void A_section_may_hold_all_categories_but_only_alone()
+    {
+        var form = new UnitForm { ParentId = Politics, TypeKey = "section", NameEn = "Multimedia", NameAr = "الوسائط", Categories = ["*"] };
+        form.Validate(Section).ShouldBeEmpty();
+        form.ToCreate(Section).Categories.ShouldBe(["*"]);
+
+        form.Categories = ["*", "local"];
+        form.Validate(Section).ShouldBe(["All categories can't be combined with other categories."]);
+    }
+
+    [Fact]
     public void Only_sections_hold_categories()
     {
         var form = new UnitForm { ParentId = News, TypeKey = "department", NameEn = "Sports", NameAr = "رياضة", Categories = ["sports"] };

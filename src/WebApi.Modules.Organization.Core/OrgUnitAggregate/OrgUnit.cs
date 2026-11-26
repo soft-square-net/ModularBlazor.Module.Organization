@@ -8,8 +8,8 @@ namespace soft.square.net.WebApi.Modules.Organization.Core.OrgUnitAggregate;
 /// <item><see cref="Path"/> is materialized: the ids from the root to this unit (<see cref="UnitPaths"/>), so a subtree is
 /// a path prefix and the grant scopes of a unit are <c>UnitScopes.For(Path)</c>.</item>
 /// <item>Its type must be allowed under its parent's type.</item>
-/// <item>A unit whose type holds categories (a Section) owns at least one post category (Content category ids); other
-/// units own none.</item>
+/// <item>A unit whose type holds categories (a Section) owns at least one post category (Content category ids), or
+/// the wildcard <c>*</c> alone (<see cref="UnitCategories.All"/>: it serves every category); other units own none.</item>
 /// <item>It either owns a tenant (<see cref="TenantBindingKind.OwnTenant"/>, through a tenant seed) or inherits the tenant
 /// of its nearest ancestor that owns one (<see cref="UnitTenancy"/>).</item>
 /// </list>
@@ -156,6 +156,8 @@ public sealed class OrgUnit : AggregateRoot<Guid>
             throw new DomainException($"A '{type.Key}' unit needs at least one post category.");
         if (!type.HoldsCategories && categoryIds.Count > 0)
             throw new DomainException($"A '{type.Key}' unit does not hold post categories.");
+        if (categoryIds.Contains(UnitCategories.All) && categoryIds.Count > 1)
+            throw new DomainException($"The category '{UnitCategories.All}' (all categories) stands alone: it can't be combined with other categories.");
         _categories.RemoveAll(c => !categoryIds.Contains(c.CategoryId));
         foreach (var id in categoryIds.Where(id => _categories.All(c => c.CategoryId != id)))
             _categories.Add(new UnitCategory(id));

@@ -65,6 +65,16 @@ public class SourcesTests
         ContentCategories.Toggle(picked, "local").ShouldBe(["sports"]);
     }
 
+    [Fact]
+    public void All_categories_stands_alone()
+    {
+        var all = ContentCategories.Toggle(["local", "sports"], ContentCategories.All);
+        all.ShouldBe(["*"]);
+        ContentCategories.IsAll(all).ShouldBeTrue();
+        ContentCategories.Toggle(all, "local").ShouldBe(["local"]);
+        ContentCategories.Toggle(all, ContentCategories.All).ShouldBeEmpty();
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("")]

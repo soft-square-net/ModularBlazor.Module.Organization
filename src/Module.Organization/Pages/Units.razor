@@ -254,7 +254,7 @@
         }
         @if (unit.Categories.Count > 0)
         {
-          <span class="mud-tree__badge" title="@L["Post categories"]">@unit.Categories.Count</span>
+          <span class="mud-tree__badge" title="@L["Post categories"]">@(ContentCategories.IsAll(unit.Categories) ? L["All"] : unit.Categories.Count)</span>
         }
       </div>
       @if (node.HasChildren)
@@ -404,7 +404,7 @@
       <dt>@L["Time zone"]</dt><dd dir="ltr">@(unit.TimeZone ?? L["the organization's"])</dd>
       @if (type?.HoldsCategories == true)
       {
-        <dt>@L["Post categories"]</dt><dd dir="ltr">@Lists.Join(unit.Categories)</dd>
+        <dt>@L["Post categories"]</dt><dd dir="@(ContentCategories.IsAll(unit.Categories) ? "auto" : "ltr")">@(ContentCategories.IsAll(unit.Categories) ? L["All categories"] : Lists.Join(unit.Categories))</dd>
       }
       <dt>@L["Tenant"]</dt>
       <dd>

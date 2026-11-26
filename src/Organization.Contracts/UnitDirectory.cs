@@ -36,7 +36,8 @@ public interface IUnitDirectory
 
     /// <summary>
     /// The Content post categories of a unit: its own when its type holds categories (a Section); otherwise those of the
-    /// tenant's units below it, each once. Empty for an unknown unit.
+    /// tenant's units below it, each once. <c>["*"]</c> (<see cref="UnitCategories.All"/>) for a Section that serves every
+    /// category, and for a unit with such a Section below it. Empty for an unknown unit.
     /// </summary>
     Task<IReadOnlyList<string>> CategoriesOfAsync(Guid unitId, CancellationToken ct = default);
 

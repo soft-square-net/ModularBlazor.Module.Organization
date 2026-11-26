@@ -14,6 +14,15 @@ public sealed record ContentCategory(string Id, string Name, string? PressId);
 public static class ContentCategories
 {
     public const string Lookup = "content.categories";
+
+    /// <summary>
+    /// The wildcard a Section stores to serve every category (Multimedia, SEO): <c>["*"]</c>, never with other ids
+    /// (<c>UnitCategories.All</c> in Organization.Contracts).
+    /// </summary>
+    public const string All = "*";
+
+    /// <summary>The selection is the wildcard.</summary>
+    public static bool IsAll(IEnumerable<string> selected) => selected.Contains(All, StringComparer.Ordinal);
     public const string Url = "api/content/categories";
 
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
@@ -34,9 +43,16 @@ public static class ContentCategories
         return [.. selected.Where(id => !ids.Contains(id)).Distinct(StringComparer.Ordinal)];
     }
 
-    /// <summary>Toggles one id in the selection (kept in the order picked).</summary>
-    public static List<string> Toggle(IReadOnlyList<string> selected, string id) =>
-        selected.Contains(id, StringComparer.Ordinal) ? [.. selected.Where(s => s != id)] : [.. selected, id];
+    /// <summary>
+    /// Toggles one id in the selection (kept in the order picked). The wildcard replaces the selection, and picking a
+    /// category replaces the wildcard: <c>*</c> always stands alone.
+    /// </summary>
+    public static List<string> Toggle(IReadOnlyList<string> selected, string id)
+    {
+        if (selected.Contains(id, StringComparer.Ordinal)) return [.. selected.Where(s => s != id)];
+        if (id == All) return [All];
+        return [.. selected.Where(s => s != All), id];
+    }
 
     private sealed class Wire
     {
