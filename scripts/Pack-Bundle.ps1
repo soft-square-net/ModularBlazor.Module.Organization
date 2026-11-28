@@ -19,7 +19,7 @@
   Windows PowerShell 5.1 or PowerShell 7.
 
 .EXAMPLE
-  ./scripts/Pack-Bundle.ps1                          # organization-1.0.0-preview.1.zip (the version in the repo)
+  ./scripts/Pack-Bundle.ps1                          # organization-1.0.0-preview.2.zip (the version in the repo)
   ./scripts/Pack-Bundle.ps1 -Version 1.0.0-ci.42     # what CI does on a pull request
 #>
 param(

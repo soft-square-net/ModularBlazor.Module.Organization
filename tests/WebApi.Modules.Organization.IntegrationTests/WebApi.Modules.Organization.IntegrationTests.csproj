@@ -1,9 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!-- Integration tests of Infrastructure: the OrganizationDbContext mappings and the specifications against a real
-       relational database (SQLite in memory), through the platform's repositories. -->
+       relational database (SQLite in memory), through the platform's repositories; and of the central API's routes over
+       HTTP (ForeignTenantApi), on the same database. -->
 
   <ItemGroup>
+    <!-- The routes' host: ASP.NET Core and Carter, which the real host provides to the module (Carter at the Module SDK's ModuleCarterVersion). -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Carter" Version="10.0.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.14" />
     <!-- The host-shared data layer (EF Core, the platform repositories), which the module compiles against only. -->
     <PackageReference Include="soft.square.net.WebApi.Data" Version="$(ModularBlazorPlatformVersion)" />
@@ -12,6 +16,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\WebApi.Modules.Organization.Infrastructure\WebApi.Modules.Organization.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\WebApi.Modules.Organization.UseCases\WebApi.Modules.Organization.UseCases.csproj" />
+    <ProjectReference Include="..\..\src\WebApi.Modules.Organization.Web\WebApi.Modules.Organization.Web.csproj" />
   </ItemGroup>
 
 </Project>

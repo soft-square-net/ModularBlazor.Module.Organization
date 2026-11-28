@@ -19,7 +19,8 @@
 //
 // Each deployment has its own PostgreSQL server (tenant store and tenant databases) and its own Platform:DeploymentId;
 // both run Organization on their "core" pool. B's gateway sends the management API to the central service and
-// everything else, the module's local routes included, to B's own core pool.
+// everything else, the module's local routes included, to B's own core pool. The central service does not know B's
+// tenant "newsdesk": B's users are foreign callers there (platform preview.8), authorized from Organization's own data.
 //
 // The platform's projects build from a ModularBlazor.Platform checkout next to this repo (Organization.Playground.csproj).
 // It uses the platform lab's ports (the client and identity are registered for them), so stop the lab, and any other
@@ -74,8 +75,9 @@ var branchStore = branchData.AddDatabase("branch-store", databaseName: "BranchTe
 // ---------------------------------------------------------------- identity (shared)
 
 // Development settings of the identity service: dev accounts (admin@modular.local, ...) and the dev client secrets.
-// The playground adds the tenant the demo's seed creates on B ("newsdesk"), a manager account for it, and the
-// platform admin's membership there (so the admin can open B's Organization pages in that tenant).
+// The playground adds the tenant the demo's seed creates on B ("newsdesk") and a manager account for it. The platform
+// admin gets no membership there: the identity service signs a user with one membership in to that tenant, and from a
+// tenant the central service does not know, the platform-admin role counts for nothing there.
 var identity = builder.AddProject<Projects.WebApi_Identity_Server>("identity", launchProfileName: null)
     .WithHttpEndpoint(port: IdentityPort)
     .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development")
@@ -84,8 +86,6 @@ var identity = builder.AddProject<Projects.WebApi_Identity_Server>("identity", l
     .WithEnvironment("Identity__ElsaClient__ClientSecret", connectorSecret)
     .WithEnvironment("Identity__Seed__Tenants__2__Id", "newsdesk")
     .WithEnvironment("Identity__Seed__Tenants__2__DisplayName", "Newsdesk")
-    .WithEnvironment("Identity__Seed__Users__0__Memberships__0__Tenant", "newsdesk")
-    .WithEnvironment("Identity__Seed__Users__0__Memberships__0__Role", "tenant-admin")
     .WithEnvironment("Identity__Seed__Users__3__Email", "manager@modular.local")
     .WithEnvironment("Identity__Seed__Users__3__Password", "Dev-Manager-2026!")
     .WithEnvironment("Identity__Seed__Users__3__DisplayName", "Mona Manager")
@@ -105,14 +105,6 @@ var central = AddDeployment("central", "central", CentralPort, centralData, cent
     .WithEnvironment("Modules__Settings__organization__Organization__Mode", "Central")
     .WithEnvironment("Modules__Settings__organization__Organization__TrustedIssuers", Issuer)
     .WithEnvironment("Modules__Settings__organization__Organization__ServiceClients", ConnectorClientId);
-// WORKAROUND (playground only, see README "Troubleshooting"): the platform host refuses a token bound to a tenant it
-// does not know (403 "The token's tenant ... does not exist"), before any module code runs, even on the module's
-// tenant-optional endpoints. B's users carry B's tenant, so the central service must know that tenant id too, or B's
-// Organization pages get 403 from it. Central gets an empty tenant of the same id; it is never seeded or replicated.
-if (builder.Configuration["Playground:CentralKnowsBranchTenants"] is not "false")
-    central.WithEnvironment("Modules__Settings__tenancy__Tenancy__Seed__2__Id", "newsdesk")
-        .WithEnvironment("Modules__Settings__tenancy__Tenancy__Seed__2__Name", "Newsdesk (central stub)")
-        .WithEnvironment("Modules__Settings__tenancy__Tenancy__Seed__2__DatabaseName", "tenant-newsdesk-stub");
 
 // ---------------------------------------------------------------- deployment B: a connector
 

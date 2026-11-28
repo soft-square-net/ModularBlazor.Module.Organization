@@ -14,7 +14,10 @@
        sector as ancestors, the Section's categories, and the managers' grants (source org:{unitId}), among them
        org.read on the department (the tenant's seed root), and subscribes to the org's live topic on B's hub
        (/hubs/live) as the manager, the subscription the org page's Live chip makes;
-    5. renames the Section on the central service, waits until B's replica has it and the live topic has nudged the
+    5. calls the central service through B's gateway as the manager, whose tenant the central service does not know (a
+       foreign caller): the manager sees the org and its units, and may not create an org; a request that only names
+       the tenant (X-Tenant, on the platform admin's token without one) is refused;
+    6. renames the Section on the central service, waits until B's replica has it and the live topic has nudged the
        manager.
 
   Every step is idempotent: run it again to repeat the checks (step 5 renames the Section again each run).
@@ -219,6 +222,9 @@ $manager = Get-UserToken $ManagerEmail $ManagerPassword $Tenant   # the manager 
 $managerSub = (Get-Claims $manager).sub
 $issuer = (Get-Claims $manager).iss
 $adminTenant = (Get-Claims $admin).tenant
+if ($adminTenant -eq $Tenant) {
+    throw "$AdminEmail signs in to tenant $Tenant, which the central service does not know, so it is no platform admin there. The playground's volumes are from before Organization 1.0.0-preview.2: delete organization-playground-central, organization-playground-branch and playground/.data, then start again."
+}
 Ok "signed in: $AdminEmail (platform admin$(if ($adminTenant) { ", tenant $adminTenant" })), $ManagerEmail (tenant $Tenant, sub $managerSub)"
 
 # ------------------------------------------------------------------ 1. org, sector, department, Section
@@ -321,7 +327,23 @@ $live = Open-Live $manager $Tenant
 $subscribed = Subscribe-Live $live $orgTopic
 Check ([bool] $subscribed.ok) "the manager subscribed to $orgTopic on B's live hub$(if (-not $subscribed.ok) { ": $($subscribed.error)" }) (the org page's Live chip)"
 
-# ------------------------------------------------------------------ 5. an edit on central reaches B
+# ------------------------------------------------------------------ 5. B's users on the central service
+
+Step "The central service and tenant $Tenant, which it does not know (through B's gateway)"
+$management = $Gateway + 'api/organization/'
+$mine = Send GET ($management + 'orgs') -token $manager -tenant $Tenant -AllowFailure
+Check ($mine.Status -eq 200 -and @($mine.Json | Where-Object id -eq $org.id).Count -eq 1) "the manager sees the org ($($mine.Status))"
+$r = Send GET ($management + "orgs/$($org.id)/units") -token $manager -tenant $Tenant -AllowFailure
+Check ($r.Status -eq 200 -and @($r.Json | Where-Object id -eq $section.id).Count -eq 1) "the manager reads the org's units ($($r.Status))"
+$r = Send POST ($management + 'orgs') @{ key = 'not-allowed'; nameEn = 'No'; nameAr = 'لا' } -token $manager -tenant $Tenant -AllowFailure
+Check ($r.Status -eq 403) "the manager may not create an org ($($r.Status))"
+if ($adminTenant) { Write-Host "   skip header-only check: $AdminEmail's token has the tenant $adminTenant" }
+else {
+    $r = Send GET ($management + 'orgs') -token $admin -tenant $Tenant -AllowFailure
+    Check ($r.Status -eq 403) "X-Tenant: $Tenant on a token without a tenant gets nothing ($($r.Status): $($r.Json.detail))"
+}
+
+# ------------------------------------------------------------------ 6. an edit on central reaches B
 
 Step 'Edit on the central service reaches B'
 $current = (Send GET ($orgUrl + "units/$($section.id)") -token $admin).Json

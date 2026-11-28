@@ -15,6 +15,26 @@ public sealed class SeedByTenantSpec : SingleResultSpecification<TenantSeed>
     public SeedByTenantSpec(string deploymentId, string tenantId) => Query.Where(s => s.DeploymentId == deploymentId && s.TenantId == tenantId);
 }
 
+/// <summary>An org's seeds for a tenant id, in any deployment (seed tenant ids are lowercase; a token's may not be).</summary>
+public sealed class SeedOfOrgForTenantSpec : Specification<TenantSeed>
+{
+    public SeedOfOrgForTenantSpec(Guid orgId, string tenantId)
+    {
+        var id = tenantId.ToLowerInvariant();
+        Query.Where(s => s.OrgId == orgId && s.TenantId == id);
+    }
+}
+
+/// <summary>The seeds for a tenant id, in any deployment and org.</summary>
+public sealed class SeedsForTenantSpec : Specification<TenantSeed>
+{
+    public SeedsForTenantSpec(string tenantId)
+    {
+        var id = tenantId.ToLowerInvariant();
+        Query.Where(s => s.TenantId == id);
+    }
+}
+
 public sealed class SeedsOfOrgSpec : Specification<TenantSeed>
 {
     public SeedsOfOrgSpec(Guid orgId) => Query.Where(s => s.OrgId == orgId).OrderBy(s => s.TenantId);

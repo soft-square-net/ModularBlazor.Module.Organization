@@ -3,12 +3,14 @@ using soft.square.net.WebApi.Modules.Organization.Core.OrgAggregate;
 using soft.square.net.WebApi.Modules.Organization.Core.OrgUnitAggregate;
 using soft.square.net.WebApi.Modules.Organization.Core.PersonAggregate;
 using soft.square.net.WebApi.Modules.Organization.Core.PositionAggregate;
+using soft.square.net.WebApi.Modules.Organization.Core.TenantSeedAggregate;
 
 namespace soft.square.net.WebApi.Modules.Organization.UseCases;
 
 /// <summary>
 /// Who is calling the central service (scoped; read from the request's token by the Web layer). A caller whose token
-/// issuer is not one of <c>Organization:TrustedIssuers</c> has no identity here.
+/// issuer is not one of <c>Organization:TrustedIssuers</c> has no identity here, and neither does a caller who only
+/// names (<c>X-Tenant</c>) a tenant this deployment does not know.
 /// </summary>
 public interface ICaller
 {
@@ -23,6 +25,14 @@ public interface ICaller
 
     /// <summary>The caller is one of <c>Organization:ServiceClients</c> (a deployment's connector).</summary>
     bool IsServiceClient { get; }
+
+    /// <summary>
+    /// The tenant of another deployment the caller's token was issued for, when this deployment does not know it (a
+    /// user of a branch deployment calling the central service); otherwise null. Such a caller is never a platform
+    /// admin or a service client, and reaches only the orgs that have a tenant seed for this tenant
+    /// (<see cref="OrgAccess"/>).
+    /// </summary>
+    string? ForeignTenantId { get; }
 }
 
 /// <summary>
@@ -33,6 +43,8 @@ public interface ICaller
 /// membership's unit and its whole subtree (unit admins, managers);</item>
 /// <item>any person of the org, and the service clients: read.</item>
 /// </list>
+/// A caller from a foreign tenant (<see cref="ICaller.ForeignTenantId"/>) has none of this in an org without a tenant
+/// seed for that tenant.
 /// </summary>
 public sealed class OrgRights(Org org, bool administers, bool isMember, bool isServiceClient, IReadOnlyList<(string UnitPath, IReadOnlyList<string> Permissions)> grants)
 {
@@ -73,6 +85,7 @@ public sealed class OrgAccess(
     IReadRepository<Membership> memberships,
     IReadRepository<PositionDefinition> positions,
     IReadRepository<OrgUnit> units,
+    IReadRepository<TenantSeed> seeds,
     TimeProvider clock) : IOrgAccess
 {
     public ICaller Caller => caller;
@@ -84,6 +97,11 @@ public sealed class OrgAccess(
         if (!IsSignedIn) return Result<OrgRights>.Unauthorized("Sign in first.");
         var org = await orgs.FirstOrDefaultAsync(new OrgByIdSpec(orgId), ct);
         if (org is null) return Result<OrgRights>.NotFound($"There is no org {orgId}.");
+
+        // A foreign tenant says which deployment's tenant the caller signed in to: it opens only the orgs that tenant
+        // belongs to. Inside them, the caller's own rows decide, as for anyone else.
+        if (caller.ForeignTenantId is { } foreign && !await seeds.AnyAsync(new SeedOfOrgForTenantSpec(orgId, foreign), ct))
+            return new OrgRights(org, false, false, false, []);
 
         var issuer = caller.Issuer!;
         var subject = caller.Subject!;

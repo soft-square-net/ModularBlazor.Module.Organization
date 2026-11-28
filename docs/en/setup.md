@@ -95,11 +95,21 @@ catch-all already sends `/api/organization` to its core pool.
 Instead of the route, the Blazor host can call the central service directly: set `Organization:BaseUrl` in its
 `wwwroot/appsettings.json` (empty: the gateway). Then the central service must allow the client's origin (CORS).
 
-> **Known gap in this preview:** a user's token is bound to a tenant of *their* deployment, and the platform host on
-> the central deployment refuses a token whose tenant it does not know (403 "The token's tenant '…' does not exist"),
-> before the module runs. Until the platform accepts such tokens on the module's tenant-optional routes, users of a
-> connector deployment get 403 from the management API unless the central deployment has a tenant with the same id.
-> See [Troubleshooting](troubleshooting.md#403-the-tokens-tenant-does-not-exist).
+### Users of other deployments
+
+A connector deployment's users call the central service with a token for one of *their* tenants, which the central
+deployment does not know. From platform 1.0.0-preview.8 the module's central routes accept it, and the service
+authorizes such a *foreign* caller from its own data. The central deployment needs no tenant of the same id.
+
+- The token's `tenant` claim must be that tenant (`X-Tenant` alone is refused).
+- The caller reaches only the orgs with a [tenant seed](seeds.md) for that tenant id; inside them, being an org admin,
+  a person or a member with a position decides (by the token's issuer and `sub`).
+- The `platform-admin` role does not apply. Platform admins manage the central service signed in without a tenant, or
+  in a tenant the central deployment has.
+
+Tenant ids are matched by name across deployments, and the identity service that issued the token must be trusted
+(`Organization:TrustedIssuers`). A tenant id the central deployment also has is that central tenant, so don't reuse
+one for a different tenant.
 
 ## 5. Check it
 
