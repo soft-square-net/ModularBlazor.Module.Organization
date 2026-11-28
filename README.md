@@ -59,6 +59,19 @@ tenant permissions:
 
 Tokens are accepted only from `Organization:TrustedIssuers` (comma-separated; empty trusts the platform's issuer).
 
+**Users of other deployments** sign in to a tenant of their own deployment, which the central one does not know. The
+central endpoints are `TenantOptional`, so on platform 1.0.0-preview.8 such a caller arrives without a tenant, as a
+*foreign* caller (`ITenantContext.ForeignTenantId`). The service then authorizes from its own data only:
+
+- The token must be issued for that tenant (`ResolvedBy` is `claim`). A tenant that only the `X-Tenant` header names
+  gets 403, whoever signed in.
+- The caller reaches only the orgs that have a tenant seed with that tenant id (any deployment). In them, the token's
+  issuer and `sub` decide as above: org admins, positions (a seed's admins are unit admins of its unit), membership.
+- The `platform-admin` role and `Organization:ServiceClients` do not apply. A platform admin manages the central
+  service signed in without a tenant, or in a tenant the central deployment has.
+
+Callers with a tenant the central deployment knows, or with none, are authorized as before.
+
 ## The API (under `/api/organization`)
 
 | Route | What |
@@ -204,11 +217,28 @@ publishes the packages to the soft-square-net GitHub Packages feed. A tag that d
 **Steps for a release** (the maintainers' decision; nothing in a pull request tags or publishes):
 
 1. Set the version in `Directory.Build.props` and merge it to `main` with green CI.
-2. Tag that commit: `git tag v1.0.0-preview.1`, then `git push origin v1.0.0-preview.1`.
+2. Tag that commit: `git tag v1.0.0-preview.2`, then `git push origin v1.0.0-preview.2`.
 3. The Packages run publishes `soft.square.net.Organization.Contracts` and `soft.square.net.Organization.Client`
-   `1.0.0-preview.1` and keeps `organization-1.0.0-preview.1.zip` as its `bundle` artifact; attach it to a GitHub
+   `1.0.0-preview.2` and keeps `organization-1.0.0-preview.2.zip` as its `bundle` artifact; attach it to a GitHub
    release if you publish one.
-4. Raise the version (for example `preview.2`) for the next changes.
+4. Raise the version (for example `preview.3`) for the next changes.
+
+## Release notes
+
+### 1.0.0-preview.2
+
+- **Platform 1.0.0-preview.8.** Built with its Module SDK and packages. Run it on preview.8 hosts: the central
+  deployment needs them.
+- **Users of other deployments** can use the central management API with their own tenant's token, authorized from the
+  service's data only (see "Authorization"). The central deployment needs no tenant of the same id any more; remove
+  the ones added as a workaround.
+- **All categories.** A Section may serve every post category with `*` alone (`UnitCategories` in Contracts); code
+  that checks a category must use `UnitCategories.Covers` ([docs](docs/en/categories.md)).
+- **Live org page.** Every position grant includes `org.read`, and a connector tenant's members with a position on the
+  seed's root unit or above may subscribe to the org's live topic. Each connector rewrites its tenants' grants once
+  after a start.
+- **Fixed:** the category picker no longer crashes when the Content module is installed.
+- No database migration since 1.0.0-preview.1.
 
 ## Installing
 
@@ -241,7 +271,7 @@ checkout next to this repo:
 | `identity` (5090) | the identity service of both deployments. It registers the connector's service client `organization-connector` (client credentials, scope `api`; the playground uses the service's one configurable service-client slot, `Identity:ElsaClient`), the tenant `newsdesk` and the account `manager@modular.local` in it |
 | `central` (5081) | deployment A: Organization in Central mode, `Platform:DeploymentId=central`, its connector pointed at itself; its own PostgreSQL server `central-data` |
 | `branch-core` | deployment B: the connector, `Platform:DeploymentId=branch`; its own PostgreSQL server `branch-data` |
-| `gateway` (5080) | B's YARP gateway: `/api/organization/local/*` and everything else to B, `/api/organization/*` to A |
+| `gateway` (5080) | B's YARP gateway: `/api/organization/local/*` and everything else to B, `/api/organization/*` to A (which does not know B's tenant: B's users are foreign callers there) |
 | `blzwebclient` (5070) | the Blazor client, on B's gateway |
 
 Both deployments get the connector's settings and its secret as host overrides
@@ -269,17 +299,17 @@ department and a Section with two categories, adds the manager as the Section's 
 `newsdesk` for deployment `branch` rooted at the department, with the manager as its admin. It waits until B reports
 `Provisioned`, checks B's replica (the tenant's units, their ancestors, the categories) and the grants (the manager's
 position, the seed admin's `unit-admin` with `org.read` on the department, and the host's `access.grants.manage`), and
-subscribes to the org's live topic on B's hub as the manager. Then it renames the Section on the central service and
+subscribes to the org's live topic on B's hub as the manager. Through B's gateway it calls the central service as the
+manager, a foreign caller there, and checks that a request that only names the tenant is refused. Then it renames the Section on the central service and
 waits until B's replica has the new name and the hub has nudged the manager. Every step is idempotent; it exits with 1 when a check fails.
 
 Then sign in on http://localhost:5070 as `manager@modular.local` (`Dev-Manager-2026!`, tenant `newsdesk`), open
 **Organization** > Playground News, and run the script again: the tree shows **Live** and the new name within a few
-seconds, without Refresh. One playground-only workaround makes this work, explained in
-[Troubleshooting](docs/en/troubleshooting.md): the central deployment has a stub tenant `newsdesk`
-(`Playground:CentralKnowsBranchTenants`).
+seconds, without Refresh.
 
 Data stays in the Docker volumes `organization-playground-central` and `organization-playground-branch` and in
-`playground/.data`; delete them to start over.
+`playground/.data`; delete them to start over. Delete them once if they are from before 1.0.0-preview.2: the central
+tenant store still holds the stub tenant `newsdesk`, and the admin account still has a membership in it.
 
 ## Branches
 

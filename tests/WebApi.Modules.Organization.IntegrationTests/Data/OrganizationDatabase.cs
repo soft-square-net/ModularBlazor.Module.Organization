@@ -60,27 +60,33 @@ public sealed class OrganizationDatabase : IDisposable
     private ServiceProvider Services(TestCaller caller)
     {
         var services = new ServiceCollection();
+        AddCentralServices(services);
+        services.AddSingleton<ICaller>(caller);
+        if (RequestTenant is { } tenant) services.AddSingleton<soft.square.net.WebApi.Contracts.Tenancy.ITenantContext>(new FixedTenant(tenant));
+        return services.BuildServiceProvider();
+    }
+
+    /// <summary>The central services over this database, without the caller and the request's tenant.</summary>
+    public void AddCentralServices(IServiceCollection services)
+    {
         services.AddScoped(_ => NewContext());
         services.AddScoped<DbContext>(sp => sp.GetRequiredService<OrganizationDbContext>());
         services.AddScoped(typeof(SharedKernel.IRepository<>), typeof(EfRepository<>));
         services.AddScoped(typeof(SharedKernel.IReadRepository<>), typeof(EfRepository<>));
         services.AddScoped<IOrgStore, EfOrgStore>();
         services.AddSingleton<TimeProvider>(Clock);
-        services.AddSingleton<ICaller>(caller);
         services.AddScoped<IOrgAccess, OrgAccess>();
         services.AddScoped<OrgFeed>();
         services.AddScoped<MembershipParts>();
         services.AddScoped<SeedAdmins>();
         services.AddSingleton(Options.Create(new OrganizationOptions { Mode = OrganizationMode.Central, MaxFeedPage = 50 }));
         services.AddSingleton<soft.square.net.WebApi.Contracts.Live.ILiveNotifier>(Live);
-        if (RequestTenant is { } tenant) services.AddSingleton<soft.square.net.WebApi.Contracts.Tenancy.ITenantContext>(new FixedTenant(tenant));
-        return services.BuildServiceProvider();
     }
 
     public void Dispose() => _connection.Dispose();
 }
 
-public sealed record TestCaller(string? Issuer, string? Subject, bool PlatformAdmin = false, bool ServiceClient = false) : ICaller
+public sealed record TestCaller(string? Issuer, string? Subject, bool PlatformAdmin = false, bool ServiceClient = false, string? ForeignTenantId = null) : ICaller
 {
     public bool IsPlatformAdmin => PlatformAdmin;
     public bool IsServiceClient => ServiceClient;

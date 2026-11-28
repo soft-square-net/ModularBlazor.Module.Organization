@@ -10,6 +10,9 @@ namespace soft.square.net.WebApi.Modules.Organization.Web;
 /// platform-level), needs a signed-in caller, and authorizes in the use case from the service's own data (platform
 /// admins, customer admins, unit admins and managers by membership position, service clients). It answers 404 outside
 /// Central mode.</para>
+/// <para>So users of other deployments, whose tokens name a tenant this one does not know, reach the central API too
+/// (a foreign tenant): <see cref="Extensions.HttpCaller"/> says who they are, and <see cref="ForeignTenantFilter"/>
+/// refuses a request that only names such a tenant.</para>
 /// <para>The local read API (<c>/local/units</c>): the current tenant's units from this deployment's replica, in every
 /// mode. It needs a tenant and a signed-in caller of it.</para>
 /// <para>One file per resource under <c>Endpoints/</c>, each endpoint named <c>Organization_&lt;Operation&gt;</c>
@@ -23,6 +26,7 @@ public sealed class OrganizationRoutes : ICarterModule
             .TenantOptional()
             .RequireAuthorization()
             .AddEndpointFilter<CentralOnlyFilter>()
+            .AddEndpointFilter<ForeignTenantFilter>()
             .AddEndpointFilter<OrganizationProblemsFilter>();
 
         OrgEndpoints.Map(central.MapGroup("/orgs").WithTags("Orgs"));

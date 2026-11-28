@@ -2,29 +2,36 @@
 
 [العربية](../ar/troubleshooting.md) · [Settings reference](settings.md)
 
-## Known gaps in this preview
+## Users of other deployments
 
 ### 403 "The token's tenant … does not exist"
 
 **Symptom.** On a connector deployment, the Organization pages (or any call to `/api/organization/*` routed to the
 central service) fail with 403 `The token's tenant 'newsdesk' does not exist`, or 404 `Unknown tenant 'newsdesk'`.
-Platform admins without a tenant work.
 
-**Cause.** A user's token is bound to a tenant of their own deployment, and the client sends `X-Tenant`. The platform
-host on the central deployment resolves the tenant of every request from its own tenant store and refuses one it does
-not know, before the module runs, even on the module's tenant-optional routes. The central service authorizes from its
-own data and does not need the tenant.
+**Cause.** The central deployment runs a platform older than 1.0.0-preview.8, or an Organization module older than
+1.0.0-preview.2.
 
-**Workaround.** Give the central deployment a tenant with the same id (it is never seeded or replicated; it only lets
-the host accept the token), for example in the central deployment's host configuration:
+**Fix.** Upgrade both there. A tenant added on the central deployment only to get around this can then be removed (from
+its configuration and from its tenant store): while the central deployment knows a tenant id, its users count as that
+central tenant's, not as foreign callers.
 
-```
-Modules__Settings__tenancy__Tenancy__Seed__<n>__Id           = newsdesk
-Modules__Settings__tenancy__Tenancy__Seed__<n>__DatabaseName = tenant-newsdesk-stub
-```
+### 403 from the management API for a user of another deployment
 
-The playground does this (`Playground:CentralKnowsBranchTenants`, on by default). A platform change that accepts such
-tokens on tenant-optional routes is the real fix.
+A user whose tenant the central deployment does not know is a *foreign* caller there, authorized from the service's
+own data ([Setup](setup.md#users-of-other-deployments)). Check, in this order:
+
+| Answer or symptom | Cause | Fix |
+| --- | --- | --- |
+| 403 `…names a tenant this deployment does not know, and the token was not issued for it` | the `X-Tenant` header names a tenant the token has no `tenant` claim for | sign in to that tenant (`tenant=` on the sign-in), or send no `X-Tenant` |
+| the org is missing from the list, and its routes answer 403 | the org has no tenant seed with the user's tenant id, for example a tenant created by hand on the connector deployment | create the tenant from a [seed](seeds.md), or sign in without a tenant |
+| the same, and the org has such a seed | the user is no person or admin of the org (issuer and subject) | add the person and a membership, or make them an org admin |
+| a platform admin may not create orgs or see them all | the `platform-admin` role does not apply to a foreign caller | sign in without a tenant, or in a tenant the central deployment has |
+
+The Organization pages decide which buttons to show from the token, so a platform admin signed in to such a tenant may
+see buttons the central service then refuses.
+
+## Live updates
 
 ### The org page does not show "Live" for a user
 

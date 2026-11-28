@@ -2,14 +2,18 @@ using soft.square.net.WebApi.Modules.Organization.Core.OrgAggregate;
 using soft.square.net.WebApi.Modules.Organization.Core.OrgUnitAggregate;
 using soft.square.net.WebApi.Modules.Organization.Core.PersonAggregate;
 using soft.square.net.WebApi.Modules.Organization.Core.PositionAggregate;
+using soft.square.net.WebApi.Modules.Organization.Core.TenantSeedAggregate;
 using soft.square.net.WebApi.Modules.Organization.Core.UnitTypeAggregate;
 
 namespace soft.square.net.WebApi.Modules.Organization.UseCases.Orgs;
 
-/// <summary>The orgs the caller can see: all of them for a platform admin, otherwise those they administer or belong to.</summary>
+/// <summary>
+/// The orgs the caller can see: all of them for a platform admin, otherwise those they administer or belong to (for a
+/// caller from a foreign tenant, only those among them with a tenant seed for that tenant).
+/// </summary>
 public sealed record ListOrgsQuery : IQuery<Result<IReadOnlyList<OrgDto>>>;
 
-public sealed class ListOrgsHandler(IOrgAccess access, IReadRepository<Org> orgs, IReadRepository<Person> persons)
+public sealed class ListOrgsHandler(IOrgAccess access, IReadRepository<Org> orgs, IReadRepository<Person> persons, IReadRepository<TenantSeed> seeds)
     : IQueryHandler<ListOrgsQuery, Result<IReadOnlyList<OrgDto>>>
 {
     public async ValueTask<Result<IReadOnlyList<OrgDto>>> Handle(ListOrgsQuery query, CancellationToken ct)
@@ -21,6 +25,11 @@ public sealed class ListOrgsHandler(IOrgAccess access, IReadRepository<Org> orgs
         var memberOf = (await persons.ListAsync(new PersonsOfIdentitySpec(caller.Issuer!, caller.Subject!), ct)).Select(p => p.OrgId);
         var administered = (await orgs.ListAsync(new OrgsAdministeredBySpec(caller.Issuer!, caller.Subject!), ct)).Select(o => o.Id);
         var ids = memberOf.Concat(administered).Distinct().ToList();
+        if (caller.ForeignTenantId is { } foreign && ids.Count > 0)
+        {
+            var seeded = (await seeds.ListAsync(new SeedsForTenantSpec(foreign), ct)).Select(s => s.OrgId).ToHashSet();
+            ids = ids.Where(seeded.Contains).ToList();
+        }
         if (ids.Count == 0) return Result<IReadOnlyList<OrgDto>>.Success([]);
         return (await orgs.ListAsync(new OrgsSpec(ids), ct)).Select(o => o.ToDto()).ToList();
     }
