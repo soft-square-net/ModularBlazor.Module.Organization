@@ -117,6 +117,12 @@
   "Search categories…": "ابحث في الفئات…",
   "A section needs at least one post category.": "يحتاج القسم إلى فئة منشورات واحدة على الأقل.",
   "The Content categories could not be read ({0}). Type category ids instead, or try again.": "تعذّرت قراءة فئات المحتوى ({0}). اكتب معرّفات الفئات بدلًا من ذلك، أو أعد المحاولة.",
+  "The sign-in was not accepted when reading the Content categories (401). Sign in again, then try again.": "لم يُقبل تسجيل الدخول عند قراءة فئات المحتوى (401). سجّل الدخول من جديد ثم أعد المحاولة.",
+  "You can't read Content's categories here (403). They belong to a tenant: sign in to a tenant you have access to, or choose All categories, or type category ids.": "لا يمكنك قراءة فئات المحتوى هنا (403). فالفئات تخص مستأجرًا: سجّل الدخول إلى مستأجر لك صلاحية فيه، أو اختر كل الفئات، أو اكتب معرّفات الفئات.",
+  "The Content categories could not be read: the server answered {0}. Type category ids instead, or try again.": "تعذّرت قراءة فئات المحتوى: ردّ الخادم بالرمز {0}. اكتب معرّفات الفئات بدلًا من ذلك، أو أعد المحاولة.",
+  "The Content categories could not be read: the server can't be reached. Type category ids instead, or try again.": "تعذّرت قراءة فئات المحتوى: لا يمكن الوصول إلى الخادم. اكتب معرّفات الفئات بدلًا من ذلك، أو أعد المحاولة.",
+  "The Content categories could not be read: the server's answer was not understood. Type category ids instead, or try again.": "تعذّرت قراءة فئات المحتوى: لم يُفهم رد الخادم. اكتب معرّفات الفئات بدلًا من ذلك، أو أعد المحاولة.",
+  "Only the first {0} categories are listed.": "تُعرض أول {0} فئة فقط.",
 
   "Search people": "البحث في الأشخاص",
   "Search people…": "ابحث في الأشخاص…",
